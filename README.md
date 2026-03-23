@@ -278,6 +278,20 @@ evolveclaw/
 - **Clean lifecycle**: `llm_output` + `before_tool_call` + `after_tool_call` + `agent_end` capture the full step context for SCOPE analysis
 - **Bootstrap files still work**: Strategic rules *could* additionally be written to `AGENTS.md` for persistence across restarts
 
+### Zero-latency design
+
+EvolveClaw adds **zero user-perceived latency** to OpenClaw. The only potentially slow operation (LLM-based guideline synthesis) happens asynchronously after the agent has already responded:
+
+| Hook | Blocking? | What it does |
+|------|-----------|-------------|
+| `before_prompt_build` | Sync, ~0ms | Reads from in-memory guideline array — no HTTP, no I/O |
+| `llm_output` | Sync, ~0ms | Stores a string in a variable |
+| `before_tool_call` | Sync, ~0ms | Pushes tool name to an array |
+| `after_tool_call` | Sync, ~0ms | Pushes result to an array |
+| `agent_end` | **Async, fire-and-forget** | HTTP call to SCOPE server → LLM synthesis. OpenClaw does **not** await this — confirmed in source: *"fire-and-forget, so we don't await"* |
+
+New guidelines only appear on the **next** turn, after the background synthesis completes.
+
 ### Guideline types
 
 | Type | Scope | Persistence | Injection | Priority |
