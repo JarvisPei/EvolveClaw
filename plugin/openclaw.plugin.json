@@ -1,7 +1,7 @@
 {
   "id": "evolveclaw-scope",
   "name": "EvolveClaw SCOPE",
-  "description": "Self-improving agent prompt evolution — synthesizes, manages, and refines guidelines from execution traces via SCOPE, with feedback loops, tactical reset, and observability.",
+  "description": "Self-improving agent prompt evolution — synthesizes, manages, and refines guidelines from execution traces via SCOPE.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -37,10 +37,6 @@
         "type": "number",
         "default": 10,
         "minimum": 1
-      },
-      "feedbackEnabled": {
-        "type": "boolean",
-        "default": true
       }
     }
   },
@@ -72,10 +68,6 @@
     "strategicRefreshInterval": {
       "label": "Strategic Refresh Interval",
       "help": "Re-fetch strategic rules from the SCOPE server every N steps to pick up newly promoted rules."
-    },
-    "feedbackEnabled": {
-      "label": "Enable Feedback Loop",
-      "help": "When enabled, user feedback (thumbs up/down) drives guideline retention and retirement."
     }
   }
 }

@@ -11,7 +11,6 @@ const DEFAULT_CONFIG: EvolveClawConfig = {
   maxGuidelines: 30,
   seedGuidelinesPath: "",
   strategicRefreshInterval: 10,
-  feedbackEnabled: true,
 };
 
 function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
@@ -24,7 +23,6 @@ function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
     maxGuidelines: cfg.maxGuidelines ?? DEFAULT_CONFIG.maxGuidelines,
     seedGuidelinesPath: cfg.seedGuidelinesPath ?? DEFAULT_CONFIG.seedGuidelinesPath,
     strategicRefreshInterval: cfg.strategicRefreshInterval ?? DEFAULT_CONFIG.strategicRefreshInterval,
-    feedbackEnabled: cfg.feedbackEnabled ?? DEFAULT_CONFIG.feedbackEnabled,
   };
 }
 
@@ -33,21 +31,12 @@ const SIDE_TRIGGERS = new Set(["heartbeat", "memory", "cron"]);
 /**
  * EvolveClaw SCOPE Plugin — Self-Improving Agent Prompt Evolution
  *
- * Lifecycle:
+ * Lifecycle (all hooks are valid OpenClaw plugin hooks):
  *   before_prompt_build  →  inject strategic + accumulated tactical rules
  *   llm_output           →  capture model response for SCOPE analysis
+ *   before_tool_call     →  capture tool call name + input
+ *   after_tool_call      →  capture tool result / error
  *   agent_end            →  call SCOPE on_step_complete, accumulate new guidelines
- *
- * Self-improving capabilities:
- *   - Tactical reset on session switch (selective forgetting)
- *   - Tool call & observation capture for richer learning signal
- *   - Semantic task extraction (not fixed strings)
- *   - User feedback loop (retain / retire guidelines)
- *   - Guideline conflict management (max cap + recency priority)
- *   - Periodic strategic rule refresh
- *   - Seed guidelines for cold start
- *   - Adaptive injection mode based on guideline count
- *   - Observability metrics logging
  */
 export default function register(api: OpenClawPluginApi) {
   const config = resolveConfig(api);
@@ -202,24 +191,22 @@ export default function register(api: OpenClawPluginApi) {
     }
   });
 
-  // ── Hook: tool_use (capture tool calls) ──
-  api.on("tool_use", (event) => {
-    const name = (event as { name?: string }).name ?? "unknown_tool";
-    const input = (event as { input?: unknown }).input;
-    const summary = `[tool: ${name}] ${JSON.stringify(input ?? {}).slice(0, 500)}`;
+  // ── Hook: before_tool_call (capture tool name + input) ──
+  api.on("before_tool_call", (event) => {
+    const { name, input } = event as { name?: string; input?: unknown };
+    const summary = `[tool: ${name ?? "unknown"}] ${JSON.stringify(input ?? {}).slice(0, 500)}`;
     currentToolCalls.push(summary);
   });
 
-  // ── Hook: tool_result (capture observations) ──
-  api.on("tool_result", (event) => {
-    const output = (event as { output?: string }).output ?? "";
-    currentObservations.push(output.slice(0, 1000));
-  });
-
-  // ── Hook: tool_error (capture errors) ──
-  api.on("tool_error", (event) => {
-    const error = (event as { error?: string }).error ?? "";
-    currentError = error.slice(0, 1000);
+  // ── Hook: after_tool_call (capture tool result or error) ──
+  api.on("after_tool_call", (event) => {
+    const { output, error } = event as { output?: string; error?: string };
+    if (error) {
+      currentError = error.slice(0, 1000);
+    }
+    if (output) {
+      currentObservations.push(output.slice(0, 1000));
+    }
   });
 
   // ── Hook: agent_end ──
@@ -282,42 +269,8 @@ export default function register(api: OpenClawPluginApi) {
     currentError = "";
   });
 
-  // ── Hook: user_feedback (closed-loop improvement) ──
-  if (config.feedbackEnabled) {
-    api.on("user_feedback", async (event) => {
-      const feedback = event as {
-        rating?: "positive" | "negative";
-        messageId?: string;
-        sessionId?: string;
-      };
-      if (!feedback.rating) return;
-
-      // Apply feedback to the most recently synthesized guideline.
-      const recentGuideline = [...guidelines]
-        .reverse()
-        .find((g) => g.type === "tactical" && g.guidelineId);
-
-      if (!recentGuideline?.guidelineId) return;
-
-      const res = await client.sendFeedback({
-        agent_name: config.agentName,
-        guideline_id: recentGuideline.guidelineId,
-        task_id: currentSessionId,
-        rating: feedback.rating,
-        context: feedback.messageId,
-      });
-
-      if (res?.action === "retired" || res?.action === "demoted") {
-        guidelines = guidelines.filter((g) => g.guidelineId !== recentGuideline.guidelineId);
-        api.logger.info(`evolveclaw: guideline ${recentGuideline.guidelineId} ${res.action} after negative feedback`);
-      } else if (res?.action === "retained") {
-        api.logger.info(`evolveclaw: guideline ${recentGuideline.guidelineId} retained after positive feedback`);
-      }
-    });
-  }
-
   api.logger.info(
-    `evolveclaw: activated (server=${config.serverUrl}, agent=${config.agentName}, inject=${config.injectMode}, maxGuidelines=${config.maxGuidelines}, feedback=${config.feedbackEnabled})`,
+    `evolveclaw: activated (server=${config.serverUrl}, agent=${config.agentName}, inject=${config.injectMode}, maxGuidelines=${config.maxGuidelines})`,
   );
 }
 

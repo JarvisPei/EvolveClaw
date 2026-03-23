@@ -10,7 +10,6 @@ export type EvolveClawConfig = {
   maxGuidelines: number;
   seedGuidelinesPath: string;
   strategicRefreshInterval: number;
-  feedbackEnabled: boolean;
 };
 
 // ── Guideline with metadata ──
