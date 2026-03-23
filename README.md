@@ -262,7 +262,7 @@ evolveclaw/
 ## 📋 TODOs and Known Limitations
 
 - [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). Could be added once SCOPE supports guideline removal or OpenClaw adds a feedback hook.
-- [ ] **Migrate to focused SDK subpaths** — OpenClaw v2026.3.22 deprecated the monolithic `openclaw/plugin-sdk` import in favor of `openclaw/plugin-sdk/*` subpaths (e.g., `openclaw/plugin-sdk/plugin-entry`). Our plugin currently uses the monolithic import because external plugins loaded via `plugins.load.paths` cannot resolve OpenClaw's subpath exports. Once published to ClawHub/npm (where `openclaw` becomes a peer dependency), we should migrate to `definePluginEntry` and focused imports.
+- [ ] **Migrate to focused SDK subpaths** — OpenClaw v2026.3.22 introduced `openclaw/plugin-sdk/*` subpaths (e.g., `openclaw/plugin-sdk/plugin-entry`) as the recommended import surface. Our plugin uses the monolithic `openclaw/plugin-sdk` because local-path plugins (`plugins.load.paths`) cannot resolve subpath exports without `npm install` in the plugin directory. This can be resolved by adding `openclaw` as a peer dependency and running `npm install`, or by publishing to ClawHub/npm.
 
 <details>
 <summary><b>🎯 Design Decisions</b></summary>
