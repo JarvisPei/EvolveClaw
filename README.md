@@ -1,11 +1,24 @@
-<p align="center">
+<div align="center">
   <img src="asserts/evolveclaw.png" alt="EvolveClaw Logo" width="500">
-</p>
+
+  <h2>A self-evolving, personalized OpenClaw</h2>
+  <h3>The more you use it, the better it understands you.</h3>
+</div>
 
 <p align="center">
-  <strong>A self-evolving, personalized OpenClaw</strong><br>
-  The more you use it, the better it understands you.
+  <a href="https://github.com/JarvisPei/SCOPE"><img src="https://img.shields.io/badge/Powered_by-SCOPE-red?style=flat-square" alt="SCOPE" /></a>
+  <a href="https://github.com/openclaw/openclaw"><img src="https://img.shields.io/badge/Built_for-OpenClaw-blue?style=flat-square" alt="OpenClaw" /></a>
+  <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License: MIT">
 </p>
+
+---
+
+## 📰 News
+
+- **[2026/03]** 🔥 Added **custom SCOPE prompts & domains** tailored for personal AI assistants — user preference learning, code quality analysis, and communication style optimization!
+- **[2026/03]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE).
+
+---
 
 EvolveClaw turns [OpenClaw](https://github.com/openclaw/openclaw) into a **self-improving agent** that continuously adapts to *your* workflows. Powered by [SCOPE](https://github.com/JarvisPei/SCOPE) (Self-evolving Context Optimization via Prompt Evolution), it observes how you interact with the agent — your tasks, your tool usage patterns, your preferences — and **automatically evolves the system prompt** with personalized guidelines that make the agent increasingly effective for *you*, not just any user.
 
@@ -27,15 +40,9 @@ EvolveClaw closes this gap with three core ideas:
 
 ## How It Works
 
-```
-You ↔ OpenClaw ↔ LLM
-        ↕ (plugin hooks)
-   EvolveClaw Plugin (TypeScript)
-        ↕ (HTTP)
-   SCOPE Sidecar Server (Python)
-        ↕
-   Your Personal Strategic Memory (disk)
-```
+<p align="center">
+  <img src="asserts/framework.png" alt="EvolveClaw Framework" width="700">
+</p>
 
 1. **Observe** — The plugin captures your full interaction trace: model output, tool calls, tool results, errors, and the semantic nature of your task
 2. **Learn** — SCOPE analyzes each trace and synthesizes a guideline if warranted — e.g., *"When this user asks for refactoring, prefer small atomic commits over large rewrites"*
