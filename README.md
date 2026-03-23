@@ -109,10 +109,14 @@ openclaw plugins install evolveclaw
 **Option B — From local source (development):**
 
 ```bash
+# Link-install (no copy) so edits take effect immediately
+openclaw plugins install -l ./plugin
+
+# Or use the convenience script
 ./scripts/install-plugin.sh
 ```
 
-Then enable it in OpenClaw:
+Then enable and restart:
 ```bash
 openclaw plugins enable evolveclaw
 openclaw gateway restart
