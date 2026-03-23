@@ -9,11 +9,14 @@ class ServerConfig:
     HOST: str = os.getenv("EVOLVECLAW_HOST", "127.0.0.1")
     PORT: int = int(os.getenv("EVOLVECLAW_PORT", "5757"))
 
-    # SCOPE optimizer settings
+    # LLM for SCOPE guideline synthesis
     SCOPE_DATA_PATH: str = os.getenv("EVOLVECLAW_SCOPE_DATA", "./scope_data")
     SCOPE_MODEL: str = os.getenv("EVOLVECLAW_SCOPE_MODEL", "gpt-4o-mini")
     SCOPE_PROVIDER: str = os.getenv("EVOLVECLAW_SCOPE_PROVIDER", "openai")
+    SCOPE_API_KEY: str | None = os.getenv("EVOLVECLAW_SCOPE_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY")
+    SCOPE_BASE_URL: str | None = os.getenv("EVOLVECLAW_SCOPE_BASE_URL") or os.getenv("ANTHROPIC_BASE_URL")
 
+    # SCOPE optimizer settings
     SCOPE_SYNTHESIS_MODE: str = os.getenv("EVOLVECLAW_SYNTHESIS_MODE", "efficiency")
     SCOPE_QUALITY_ANALYSIS: bool = os.getenv("EVOLVECLAW_QUALITY_ANALYSIS", "true").lower() == "true"
     SCOPE_QUALITY_FREQUENCY: int = int(os.getenv("EVOLVECLAW_QUALITY_FREQUENCY", "3"))

@@ -24,7 +24,8 @@ from pydantic import BaseModel
 
 from config import ServerConfig
 from scope import SCOPEOptimizer
-from scope.models import create_litellm_model, create_openai_model
+from scope.models import create_anthropic_model, create_litellm_model, create_openai_model
+from scope.models.anthropic_adapter import AnthropicAdapter
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,9 +44,20 @@ app = FastAPI(
 # ── Model + optimizer initialization ──
 
 def create_model():
+    if cfg.SCOPE_PROVIDER == "anthropic":
+        from anthropic import AsyncAnthropic
+        client_kwargs = {}
+        if cfg.SCOPE_API_KEY:
+            client_kwargs["api_key"] = cfg.SCOPE_API_KEY
+        if cfg.SCOPE_BASE_URL:
+            client_kwargs["base_url"] = cfg.SCOPE_BASE_URL
+        client = AsyncAnthropic(**client_kwargs)
+        return AnthropicAdapter(client, model=cfg.SCOPE_MODEL)
     if cfg.SCOPE_PROVIDER == "openai":
-        return create_openai_model(cfg.SCOPE_MODEL)
-    return create_litellm_model(cfg.SCOPE_MODEL)
+        return create_openai_model(cfg.SCOPE_MODEL, api_key=cfg.SCOPE_API_KEY)
+    return create_litellm_model(
+        cfg.SCOPE_MODEL, api_key=cfg.SCOPE_API_KEY, base_url=cfg.SCOPE_BASE_URL,
+    )
 
 model = create_model()
 optimizer = SCOPEOptimizer(
