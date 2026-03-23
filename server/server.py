@@ -22,6 +22,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from config import ServerConfig
+from prompts import EVOLVECLAW_DOMAINS, get_custom_prompts
 from scope import SCOPEOptimizer
 from scope.models import create_anthropic_model, create_litellm_model, create_openai_model
 from scope.models.anthropic_adapter import AnthropicAdapter
@@ -69,6 +70,8 @@ optimizer = SCOPEOptimizer(
     max_rules_per_task=cfg.SCOPE_MAX_RULES_PER_TASK,
     max_strategic_rules_per_domain=cfg.SCOPE_MAX_STRATEGIC_PER_DOMAIN,
     synthesis_mode=cfg.SCOPE_SYNTHESIS_MODE,
+    custom_prompts=get_custom_prompts(),
+    custom_domains=EVOLVECLAW_DOMAINS,
 )
 
 start_time = time.time()

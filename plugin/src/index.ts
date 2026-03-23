@@ -23,6 +23,10 @@ function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
 
 const SIDE_TRIGGERS = new Set(["heartbeat", "memory", "cron"]);
 
+function isSubagentSession(sessionKey: string): boolean {
+  return sessionKey.toLowerCase().includes("subagent:");
+}
+
 /**
  * EvolveClaw SCOPE Plugin — Self-Improving Agent Prompt Evolution
  *
@@ -54,6 +58,7 @@ export default function register(api: OpenClawPluginApi) {
   let currentToolCalls: string[] = [];
   let currentObservations: string[] = [];
   let currentError = "";
+  let skipCurrentSession = false;
 
   // ── Cold start: load strategic rules from SCOPE server ──
   client.getStrategicRules(config.agentName).then((res) => {
@@ -95,6 +100,14 @@ export default function register(api: OpenClawPluginApi) {
 
     if (SIDE_TRIGGERS.has(currentTrigger)) return {};
 
+    // Skip sub-agent sessions — they use minimal prompts for narrow
+    // internal tasks and would generate noisy, low-value guidelines.
+    skipCurrentSession = isSubagentSession(currentSessionId);
+    if (skipCurrentSession) {
+      api.logger.debug(`evolveclaw: skipping sub-agent session ${currentSessionId}`);
+      return {};
+    }
+
     // Session switch detection → tactical reset.
     if (previousSessionId && previousSessionId !== currentSessionId) {
       const tacticalCount = guidelines.filter((g) => g.type === "tactical").length;
@@ -113,6 +126,7 @@ export default function register(api: OpenClawPluginApi) {
 
   // ── Hook: llm_output ──
   api.on("llm_output", (event) => {
+    if (skipCurrentSession) return;
     if (event.text) {
       currentModelOutput = event.text;
     }
@@ -120,6 +134,7 @@ export default function register(api: OpenClawPluginApi) {
 
   // ── Hook: before_tool_call (capture tool name + input) ──
   api.on("before_tool_call", (event) => {
+    if (skipCurrentSession) return;
     const { name, input } = event as { name?: string; input?: unknown };
     const summary = `[tool: ${name ?? "unknown"}] ${JSON.stringify(input ?? {}).slice(0, 500)}`;
     currentToolCalls.push(summary);
@@ -127,6 +142,7 @@ export default function register(api: OpenClawPluginApi) {
 
   // ── Hook: after_tool_call (capture tool result or error) ──
   api.on("after_tool_call", (event) => {
+    if (skipCurrentSession) return;
     const { output, error } = event as { output?: string; error?: string };
     if (error) {
       currentError = error.slice(0, 1000);
@@ -138,7 +154,7 @@ export default function register(api: OpenClawPluginApi) {
 
   // ── Hook: agent_end ──
   api.on("agent_end", async (event) => {
-    if (SIDE_TRIGGERS.has(currentTrigger)) {
+    if (skipCurrentSession || SIDE_TRIGGERS.has(currentTrigger)) {
       currentModelOutput = "";
       currentToolCalls = [];
       currentObservations = [];

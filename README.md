@@ -3,9 +3,11 @@
 ## A self-evolving, personalized OpenClaw 
 ### The more you use it, the better it understands you. 
 
-EvolveClaw turns [OpenClaw](https://github.com/openclaw/openclaw) into a **self-improving agent** that continuously adapts to *your* workflows. Powered by [SCOPE](https://github.com/JarvisPei/SCOPE) (Self-evolving Context Optimization via Prompt Evolution), it observes how you interact with the agent — your tasks, your tool usage patterns — and **automatically evolves the system prompt** with personalized guidelines that make the agent increasingly effective for *you*, not just any user.
+EvolveClaw turns [OpenClaw](https://github.com/openclaw/openclaw) into a **self-improving agent** that continuously adapts to *your* workflows. Powered by [SCOPE](https://github.com/JarvisPei/SCOPE) (Self-evolving Context Optimization via Prompt Evolution), it observes how you interact with the agent — your tasks, your tool usage patterns, your preferences — and **automatically evolves the system prompt** with personalized guidelines that make the agent increasingly effective for *you*, not just any user.
 
 No two EvolveClaw instances are the same. Over time, each one develops a unique personality shaped by its owner's habits.
+
+**Key adaptation**: SCOPE was originally designed for task-specific benchmarks (e.g., HLE). EvolveClaw extends it with **custom prompt templates and domain categories** tailored for a personal AI coding assistant — focusing on user preference learning, code quality, communication style, and workflow patterns instead of domain-specific problem-solving heuristics.
 
 ## Why EvolveClaw?
 
@@ -48,9 +50,31 @@ Unlike static prompt engineering or manual rule files, EvolveClaw implements a *
 - **Task description**: The user's last message is extracted and passed to SCOPE for per-task guideline management
 
 ### Adaptive Memory
-- **Strategic memory** — Cross-task guidelines that persist to disk. Loaded on startup, refreshed periodically
+- **Strategic memory** — Cross-task guidelines that persist to disk. Loaded on startup
 - **Tactical memory** — Task-specific guidelines that live in-memory and auto-clear on session switch
-- **Guideline cap** — Enforces a maximum; evicts oldest tactical guidelines first
+- **Automatic memory optimization** — When strategic rules accumulate past the domain limit, SCOPE's `MemoryOptimizer` automatically consolidates similar rules, prunes rules subsumed by more general ones, and resolves conflicts — all via LLM-driven analysis, not simple truncation
+- **Plugin-side guideline cap** — The plugin enforces a maximum guideline count in memory; oldest tactical guidelines are evicted first when the cap is reached
+
+### Custom SCOPE Prompts & Domains
+
+SCOPE's built-in prompts are designed for task-specific benchmarks. EvolveClaw overrides them via SCOPE's `custom_prompts` and `custom_domains` API (`server/prompts.py`) to focus on personal assistant concerns:
+
+| Domain | What It Captures |
+|--------|-----------------|
+| `tool_usage` | IDE/shell tool patterns — file ops, search, terminal commands |
+| `code_quality` | Code generation patterns, style, correctness, testing |
+| `error_handling` | Safe operations, rollback strategies, error recovery |
+| `communication` | Response style, conciseness, explanation depth |
+| `user_preferences` | Learned user habits — coding style, frameworks, conventions |
+| `context_awareness` | Project structure knowledge, conversation history |
+| `workflow` | Multi-step task planning, edit-test cycles |
+| `general` | Catch-all for uncategorized rules |
+
+The `user_preferences` domain is particularly important: when the analyzer detects consistent user habits (e.g., "always uses TypeScript", "prefers concise responses"), these are classified as **strategic** and persist across sessions — so the assistant remembers your preferences permanently.
+
+### Sub-Agent Filtering
+
+OpenClaw internally spawns sub-agents (file search, code lookup, etc.) that use minimal system prompts. EvolveClaw filters these out — only the main user-facing session generates guidelines. Sub-agent sessions are detected by the `"subagent:"` prefix in the session key and silently skipped across all hooks.
 
 ### Injection Modes
 - **`append_system`** (default) — Guidelines are appended to the system prompt, which LLM providers typically cache for token efficiency
@@ -79,6 +103,7 @@ evolveclaw/
 ├── server/                    # SCOPE sidecar HTTP server (Python)
 │   ├── server.py              # FastAPI server: step analysis, tactical reset, stats
 │   ├── config.py              # Server configuration (env vars)
+│   ├── prompts.py             # Custom SCOPE prompts & domains for personal assistant use
 │   ├── requirements.txt
 │   └── .env.template          # Environment variable template
 └── scripts/
