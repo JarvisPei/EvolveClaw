@@ -1,6 +1,6 @@
 {
-  "id": "evolveclaw-scope",
-  "name": "EvolveClaw SCOPE",
+  "id": "evolveclaw",
+  "name": "EvolveClaw",
   "description": "Self-improving agent prompt evolution — synthesizes, manages, and refines guidelines from execution traces via SCOPE.",
   "configSchema": {
     "type": "object",

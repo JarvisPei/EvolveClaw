@@ -8,6 +8,7 @@
 <p align="center">
   <a href="https://github.com/JarvisPei/SCOPE"><img src="https://img.shields.io/badge/Powered_by-SCOPE-red?style=flat-square" alt="SCOPE" /></a>
   <a href="https://github.com/openclaw/openclaw"><img src="https://img.shields.io/badge/Built_for-OpenClaw-blue?style=flat-square" alt="OpenClaw" /></a>
+  <a href="https://clawhub.ai"><img src="https://img.shields.io/badge/Available_on-ClawHub-purple?style=flat-square" alt="ClawHub" /></a>
   <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License: MIT">
 </p>
 
@@ -99,13 +100,21 @@ Or use the convenience script:
 
 ### 2. Install the Plugin
 
+**Option A — From ClawHub (recommended once published):**
+
+```bash
+openclaw plugins install evolveclaw
+```
+
+**Option B — From local source (development):**
+
 ```bash
 ./scripts/install-plugin.sh
 ```
 
 Then enable it in OpenClaw:
 ```bash
-openclaw plugins enable evolveclaw-scope
+openclaw plugins enable evolveclaw
 openclaw gateway restart
 ```
 
@@ -118,7 +127,7 @@ In `~/.openclaw/openclaw.json`:
 {
   "plugins": {
     "entries": {
-      "evolveclaw-scope": {
+      "evolveclaw": {
         "enabled": true,
         "config": {
           "serverUrl": "http://127.0.0.1:5757",

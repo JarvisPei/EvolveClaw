@@ -1,4 +1,5 @@
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { ScopeClient } from "./scope-client.js";
 import type { EvolveClawConfig, GuidelineEntry, InjectMode } from "./types.js";
 
@@ -37,7 +38,12 @@ function isSubagentSession(sessionKey: string): boolean {
  *   after_tool_call      →  capture tool result / error
  *   agent_end            →  call SCOPE on_step_complete, accumulate new guidelines
  */
-export default function register(api: OpenClawPluginApi) {
+export default definePluginEntry({
+  id: "evolveclaw",
+  name: "EvolveClaw",
+  description:
+    "Self-improving agent prompt evolution — synthesizes, manages, and refines guidelines from execution traces via SCOPE.",
+  register(api) {
   const config = resolveConfig(api);
   if (!config.enabled) {
     api.logger.info("evolveclaw: disabled via config");
@@ -236,7 +242,8 @@ export default function register(api: OpenClawPluginApi) {
   api.logger.info(
     `evolveclaw: activated (server=${config.serverUrl}, agent=${config.agentName}, inject=${config.injectMode}, maxGuidelines=${config.maxGuidelines})`,
   );
-}
+  },
+});
 
 // ── Helpers ──
 
