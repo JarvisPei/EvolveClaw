@@ -88,6 +88,14 @@ async function forwardOpenClawModelConfig(
 
   let apiKey = config.scopeApiKey;
   if (!apiKey) {
+    // Try reading apiKey directly from OpenClaw's provider config (works for plain strings)
+    const rawKey = providerCfg?.apiKey;
+    if (typeof rawKey === "string" && rawKey.trim()) {
+      apiKey = rawKey.trim();
+    }
+  }
+  if (!apiKey) {
+    // Fall back to runtime auth resolution (handles SecretRef and other auth modes)
     try {
       const runtime = (api as Record<string, unknown>).runtime as Record<string, unknown> | undefined;
       const modelAuth = runtime?.modelAuth as {
@@ -98,7 +106,7 @@ async function forwardOpenClawModelConfig(
         apiKey = auth?.apiKey;
       }
     } catch {
-      // API key resolution failed — the server may still have .env credentials
+      // resolveApiKeyForProvider may not support custom providers
     }
   }
 
