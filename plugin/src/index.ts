@@ -93,12 +93,15 @@ export default function register(api: OpenClawPluginApi) {
   const s = getState();
 
   // ── Cold start: load strategic rules (only once across all registrations) ──
+  const g = globalThis as Record<string, unknown>;
+  api.logger.info(`evolveclaw: register() — globalThis key exists: ${!!g[GLOBAL_KEY]}, strategicLoaded: ${s.strategicLoaded}, guidelines.length: ${s.guidelines.length}`);
+
   if (!s.strategicLoaded) {
     s.strategicLoaded = true;
     client.getStrategicRules(config.agentName).then((res) => {
       if (res?.rules) {
         s.guidelines.push({ text: res.rules, type: "strategic" });
-        api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s) from SCOPE server`);
+        api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s), guidelines.length now: ${s.guidelines.length}`);
       } else {
         api.logger.info("evolveclaw: no strategic rules found on SCOPE server");
       }
@@ -162,6 +165,9 @@ export default function register(api: OpenClawPluginApi) {
       api.logger.info(`evolveclaw: session switch detected, cleared ${tacticalCount} tactical guideline(s)`);
     }
     s.previousSessionId = s.currentSessionId;
+
+    const gCheck = globalThis as Record<string, unknown>;
+    api.logger.info(`evolveclaw: before_prompt_build — globalThis key exists: ${!!gCheck[GLOBAL_KEY]}, guidelines.length: ${s.guidelines.length}, strategicLoaded: ${s.strategicLoaded}`);
 
     const activeGuidelines = s.guidelines.filter((g) => g.text);
     if (activeGuidelines.length === 0) {
