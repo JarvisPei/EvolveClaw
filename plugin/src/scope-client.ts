@@ -1,6 +1,9 @@
 import type {
+  FeedbackRequest,
+  FeedbackResponse,
   HealthResponse,
   RulesResponse,
+  StatsResponse,
   StepCompleteRequest,
   StepCompleteResponse,
 } from "./types.js";
@@ -34,6 +37,14 @@ export class ScopeClient {
 
   async resetTactical(agentName: string, taskId?: string): Promise<void> {
     await this.post("/reset", { agent_name: agentName, task_id: taskId });
+  }
+
+  async sendFeedback(req: FeedbackRequest): Promise<FeedbackResponse | null> {
+    return this.post<FeedbackResponse>("/feedback", req);
+  }
+
+  async getStats(agentName: string): Promise<StatsResponse | null> {
+    return this.get<StatsResponse>(`/stats/${encodeURIComponent(agentName)}`);
   }
 
   // ── Internal helpers ──

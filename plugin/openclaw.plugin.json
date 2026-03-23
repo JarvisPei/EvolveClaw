@@ -1,7 +1,7 @@
 {
   "id": "evolveclaw-scope",
   "name": "EvolveClaw SCOPE",
-  "description": "Evolves the agent system prompt using SCOPE — synthesizes guidelines from execution traces to continuously improve agent performance.",
+  "description": "Self-improving agent prompt evolution — synthesizes, manages, and refines guidelines from execution traces via SCOPE, with feedback loops, tactical reset, and observability.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -20,8 +20,27 @@
       },
       "injectMode": {
         "type": "string",
-        "enum": ["append_system", "prepend_context", "both"],
+        "enum": ["append_system", "prepend_context", "both", "auto"],
         "default": "append_system"
+      },
+      "maxGuidelines": {
+        "type": "number",
+        "default": 30,
+        "minimum": 5,
+        "maximum": 200
+      },
+      "seedGuidelinesPath": {
+        "type": "string",
+        "default": ""
+      },
+      "strategicRefreshInterval": {
+        "type": "number",
+        "default": 10,
+        "minimum": 1
+      },
+      "feedbackEnabled": {
+        "type": "boolean",
+        "default": true
       }
     }
   },
@@ -40,7 +59,23 @@
     },
     "injectMode": {
       "label": "Injection Mode",
-      "help": "Where to inject SCOPE guidelines: append_system (system prompt, cacheable), prepend_context (user prompt, per-turn), or both."
+      "help": "Where to inject SCOPE guidelines: append_system (cacheable), prepend_context (per-turn), both, or auto (dynamically switches based on guideline volume)."
+    },
+    "maxGuidelines": {
+      "label": "Max Guidelines",
+      "help": "Maximum number of guidelines to keep in memory. Oldest tactical guidelines are evicted first when the cap is reached."
+    },
+    "seedGuidelinesPath": {
+      "label": "Seed Guidelines File",
+      "help": "Path to a text file with initial guidelines (one per paragraph) for cold start. Leave empty to skip."
+    },
+    "strategicRefreshInterval": {
+      "label": "Strategic Refresh Interval",
+      "help": "Re-fetch strategic rules from the SCOPE server every N steps to pick up newly promoted rules."
+    },
+    "feedbackEnabled": {
+      "label": "Enable Feedback Loop",
+      "help": "When enabled, user feedback (thumbs up/down) drives guideline retention and retirement."
     }
   }
 }

@@ -1,12 +1,17 @@
+import { readFileSync } from "node:fs";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { ScopeClient } from "./scope-client.js";
-import type { EvolveClawConfig, InjectMode } from "./types.js";
+import type { EvolveClawConfig, GuidelineEntry, InjectMode } from "./types.js";
 
 const DEFAULT_CONFIG: EvolveClawConfig = {
   serverUrl: "http://127.0.0.1:5757",
   agentName: "openclaw-agent",
   enabled: true,
   injectMode: "append_system",
+  maxGuidelines: 30,
+  seedGuidelinesPath: "",
+  strategicRefreshInterval: 10,
+  feedbackEnabled: true,
 };
 
 function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
@@ -16,19 +21,33 @@ function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
     agentName: cfg.agentName ?? DEFAULT_CONFIG.agentName,
     enabled: cfg.enabled ?? DEFAULT_CONFIG.enabled,
     injectMode: cfg.injectMode ?? DEFAULT_CONFIG.injectMode,
+    maxGuidelines: cfg.maxGuidelines ?? DEFAULT_CONFIG.maxGuidelines,
+    seedGuidelinesPath: cfg.seedGuidelinesPath ?? DEFAULT_CONFIG.seedGuidelinesPath,
+    strategicRefreshInterval: cfg.strategicRefreshInterval ?? DEFAULT_CONFIG.strategicRefreshInterval,
+    feedbackEnabled: cfg.feedbackEnabled ?? DEFAULT_CONFIG.feedbackEnabled,
   };
 }
 
+const SIDE_TRIGGERS = new Set(["heartbeat", "memory", "cron"]);
+
 /**
- * EvolveClaw SCOPE Plugin
+ * EvolveClaw SCOPE Plugin — Self-Improving Agent Prompt Evolution
  *
  * Lifecycle:
  *   before_prompt_build  →  inject strategic + accumulated tactical rules
  *   llm_output           →  capture model response for SCOPE analysis
  *   agent_end            →  call SCOPE on_step_complete, accumulate new guidelines
  *
- * The plugin communicates with a SCOPE sidecar server (Python/FastAPI)
- * via HTTP. If the server is unavailable, all operations gracefully no-op.
+ * Self-improving capabilities:
+ *   - Tactical reset on session switch (selective forgetting)
+ *   - Tool call & observation capture for richer learning signal
+ *   - Semantic task extraction (not fixed strings)
+ *   - User feedback loop (retain / retire guidelines)
+ *   - Guideline conflict management (max cap + recency priority)
+ *   - Periodic strategic rule refresh
+ *   - Seed guidelines for cold start
+ *   - Adaptive injection mode based on guideline count
+ *   - Observability metrics logging
  */
 export default function register(api: OpenClawPluginApi) {
   const config = resolveConfig(api);
@@ -40,105 +59,303 @@ export default function register(api: OpenClawPluginApi) {
   const client = new ScopeClient(config.serverUrl);
 
   // ── Per-run state ──
-  // Accumulated guidelines from SCOPE (persisted across turns within a session).
-  let accumulatedGuidelines: string[] = [];
-  // Captured from the current run for post-step analysis.
+  let guidelines: GuidelineEntry[] = [];
   let currentSystemPrompt = "";
   let currentModelOutput = "";
   let currentTrigger = "";
   let currentSessionId = "";
+  let previousSessionId = "";
+  let stepCount = 0;
+  let guidelinesSynthesized = 0;
+  let currentToolCalls: string[] = [];
+  let currentObservations: string[] = [];
+  let currentError = "";
 
-  // Pre-load strategic rules on startup.
+  // ── Cold start: load seed guidelines from file ──
+  if (config.seedGuidelinesPath) {
+    try {
+      const seed = readFileSync(config.seedGuidelinesPath, "utf-8").trim();
+      if (seed) {
+        for (const line of seed.split(/\n{2,}/)) {
+          const text = line.trim();
+          if (text) {
+            guidelines.push({
+              text,
+              type: "seed",
+              createdAt: Date.now(),
+              injectionCount: 0,
+            });
+          }
+        }
+        api.logger.info(`evolveclaw: loaded ${guidelines.length} seed guideline(s) from ${config.seedGuidelinesPath}`);
+      }
+    } catch {
+      api.logger.warn(`evolveclaw: could not read seed guidelines from ${config.seedGuidelinesPath}`);
+    }
+  }
+
+  // ── Cold start: load strategic rules from SCOPE server ──
   client.getStrategicRules(config.agentName).then((res) => {
     if (res?.rules) {
-      accumulatedGuidelines.push(res.rules);
-      api.logger.info(
-        `evolveclaw: loaded ${res.rule_count} strategic rule(s) from SCOPE server`,
-      );
+      guidelines.push({
+        text: res.rules,
+        type: "strategic",
+        createdAt: Date.now(),
+        injectionCount: 0,
+      });
+      api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s) from SCOPE server`);
     }
   });
 
+  // ── Guideline management helpers ──
+
+  function enforceGuidelineCap() {
+    if (guidelines.length <= config.maxGuidelines) return;
+    // Keep strategic and seed, evict oldest tactical first.
+    const tactical = guidelines.filter((g) => g.type === "tactical");
+    const keep = guidelines.filter((g) => g.type !== "tactical");
+    const budget = Math.max(0, config.maxGuidelines - keep.length);
+    // Keep most recent tactical entries.
+    const retained = tactical.slice(-budget);
+    guidelines = [...keep, ...retained];
+    api.logger.info(`evolveclaw: guideline cap enforced, ${guidelines.length} remaining`);
+  }
+
+  function resolveInjectMode(): InjectMode {
+    if (config.injectMode !== "auto") return config.injectMode;
+    const totalLen = guidelines.reduce((acc, g) => acc + g.text.length, 0);
+    // Heuristic: if guidelines exceed ~4000 chars, switch to prepend_context
+    // to avoid oversized system prompts that may get cached inefficiently.
+    return totalLen > 4000 ? "prepend_context" : "append_system";
+  }
+
+  function extractTaskSummary(prompt: string, sessionId: string): string {
+    // Extract a meaningful task description from the user's input.
+    const messages = prompt.split(/\n/).filter(Boolean);
+    // Look for the last user-like line (heuristic).
+    const userLines = messages.filter(
+      (line) => !line.startsWith("#") && !line.startsWith("```") && line.length > 10,
+    );
+    const lastMeaningful = userLines.pop();
+    if (lastMeaningful) {
+      const truncated = lastMeaningful.length > 200
+        ? lastMeaningful.slice(0, 200) + "..."
+        : lastMeaningful;
+      return truncated;
+    }
+    return `Session ${sessionId}: agent task`;
+  }
+
+  async function refreshStrategicRules() {
+    const res = await client.getStrategicRules(config.agentName);
+    if (!res?.rules) return;
+    // Replace existing strategic entries with fresh ones from server.
+    guidelines = guidelines.filter((g) => g.type !== "strategic");
+    guidelines.push({
+      text: res.rules,
+      type: "strategic",
+      createdAt: Date.now(),
+      injectionCount: 0,
+    });
+    api.logger.info(`evolveclaw: refreshed ${res.rule_count} strategic rule(s)`);
+  }
+
   // ── Hook: before_prompt_build ──
-  // Inject SCOPE guidelines into the system prompt or user context.
   api.on("before_prompt_build", (event, ctx) => {
     currentSystemPrompt = event.prompt ?? "";
     currentTrigger = ctx.trigger ?? "";
     currentSessionId = ctx.sessionId ?? "";
 
-    // Skip injection for housekeeping turns.
-    const SIDE_TRIGGERS = new Set(["heartbeat", "memory", "cron"]);
-    if (SIDE_TRIGGERS.has(currentTrigger)) {
-      return {};
+    if (SIDE_TRIGGERS.has(currentTrigger)) return {};
+
+    // Session switch detection → tactical reset.
+    if (previousSessionId && previousSessionId !== currentSessionId) {
+      const tacticalCount = guidelines.filter((g) => g.type === "tactical").length;
+      guidelines = guidelines.filter((g) => g.type !== "tactical");
+      client.resetTactical(config.agentName, previousSessionId);
+      api.logger.info(`evolveclaw: session switch detected, cleared ${tacticalCount} tactical guideline(s)`);
+    }
+    previousSessionId = currentSessionId;
+
+    // Periodic strategic refresh.
+    if (stepCount > 0 && stepCount % config.strategicRefreshInterval === 0) {
+      refreshStrategicRules();
     }
 
-    const guidelines = accumulatedGuidelines.filter(Boolean).join("\n\n");
-    if (!guidelines) {
-      return {};
+    const activeGuidelines = guidelines.filter((g) => g.text);
+    if (activeGuidelines.length === 0) return {};
+
+    // Increment injection counts for observability.
+    for (const g of activeGuidelines) {
+      g.injectionCount++;
     }
 
-    const block = formatGuidelinesBlock(guidelines);
-    return buildInjectionResult(block, config.injectMode);
+    const block = formatGuidelinesBlock(activeGuidelines);
+    const mode = resolveInjectMode();
+    return buildInjectionResult(block, mode);
   });
 
   // ── Hook: llm_output ──
-  // Capture the model's response text for SCOPE analysis.
   api.on("llm_output", (event) => {
     if (event.text) {
       currentModelOutput = event.text;
     }
   });
 
+  // ── Hook: tool_use (capture tool calls) ──
+  api.on("tool_use", (event) => {
+    const name = (event as { name?: string }).name ?? "unknown_tool";
+    const input = (event as { input?: unknown }).input;
+    const summary = `[tool: ${name}] ${JSON.stringify(input ?? {}).slice(0, 500)}`;
+    currentToolCalls.push(summary);
+  });
+
+  // ── Hook: tool_result (capture observations) ──
+  api.on("tool_result", (event) => {
+    const output = (event as { output?: string }).output ?? "";
+    currentObservations.push(output.slice(0, 1000));
+  });
+
+  // ── Hook: tool_error (capture errors) ──
+  api.on("tool_error", (event) => {
+    const error = (event as { error?: string }).error ?? "";
+    currentError = error.slice(0, 1000);
+  });
+
   // ── Hook: agent_end ──
-  // After the agent run completes, send the step to SCOPE for analysis.
-  // New guidelines are accumulated for injection in the next turn.
   api.on("agent_end", async (event) => {
-    const SIDE_TRIGGERS = new Set(["heartbeat", "memory", "cron"]);
     if (SIDE_TRIGGERS.has(currentTrigger)) {
       currentModelOutput = "";
+      currentToolCalls = [];
+      currentObservations = [];
+      currentError = "";
       return;
     }
 
-    // Extract error if present.
-    const messages = (event as { messages?: Array<{ role: string; content?: string }> })
-      .messages;
-    const lastAssistant = messages
-      ?.filter((m) => m.role === "assistant")
-      .pop();
+    stepCount++;
+
+    const messages = (event as { messages?: Array<{ role: string; content?: string }> }).messages;
+    const lastAssistant = messages?.filter((m) => m.role === "assistant").pop();
+
+    const taskDescription = extractTaskSummary(currentSystemPrompt, currentSessionId);
 
     const stepResult = await client.onStepComplete({
       agent_name: config.agentName,
       agent_role: "OpenClaw AI Assistant",
-      task: `Session ${currentSessionId}: responding to user`,
+      task: taskDescription,
       model_output: currentModelOutput || lastAssistant?.content || "",
+      tool_calls: currentToolCalls.length > 0 ? currentToolCalls.join("\n---\n") : undefined,
+      observations: currentObservations.length > 0 ? currentObservations.join("\n---\n") : undefined,
+      error: currentError || undefined,
       current_system_prompt: currentSystemPrompt,
       task_id: currentSessionId,
     });
 
     if (stepResult?.guideline && !stepResult.skipped) {
-      accumulatedGuidelines.push(stepResult.guideline);
+      guidelines.push({
+        text: stepResult.guideline,
+        type: stepResult.guideline_type ?? "tactical",
+        createdAt: Date.now(),
+        injectionCount: 0,
+        guidelineId: stepResult.guideline_id,
+      });
+      guidelinesSynthesized++;
+      enforceGuidelineCap();
       api.logger.info(
-        `evolveclaw: new ${stepResult.guideline_type} guideline synthesized`,
+        `evolveclaw: new ${stepResult.guideline_type} guideline synthesized (total: ${guidelines.length}, synthesized: ${guidelinesSynthesized})`,
+      );
+    }
+
+    // Observability: periodic stats log.
+    if (stepCount % 5 === 0) {
+      const strategic = guidelines.filter((g) => g.type === "strategic").length;
+      const tactical = guidelines.filter((g) => g.type === "tactical").length;
+      const seed = guidelines.filter((g) => g.type === "seed").length;
+      api.logger.info(
+        `evolveclaw: [stats] steps=${stepCount} guidelines=${guidelines.length} (strategic=${strategic} tactical=${tactical} seed=${seed}) synthesized=${guidelinesSynthesized}`,
       );
     }
 
     currentModelOutput = "";
+    currentToolCalls = [];
+    currentObservations = [];
+    currentError = "";
   });
 
+  // ── Hook: user_feedback (closed-loop improvement) ──
+  if (config.feedbackEnabled) {
+    api.on("user_feedback", async (event) => {
+      const feedback = event as {
+        rating?: "positive" | "negative";
+        messageId?: string;
+        sessionId?: string;
+      };
+      if (!feedback.rating) return;
+
+      // Apply feedback to the most recently synthesized guideline.
+      const recentGuideline = [...guidelines]
+        .reverse()
+        .find((g) => g.type === "tactical" && g.guidelineId);
+
+      if (!recentGuideline?.guidelineId) return;
+
+      const res = await client.sendFeedback({
+        agent_name: config.agentName,
+        guideline_id: recentGuideline.guidelineId,
+        task_id: currentSessionId,
+        rating: feedback.rating,
+        context: feedback.messageId,
+      });
+
+      if (res?.action === "retired" || res?.action === "demoted") {
+        guidelines = guidelines.filter((g) => g.guidelineId !== recentGuideline.guidelineId);
+        api.logger.info(`evolveclaw: guideline ${recentGuideline.guidelineId} ${res.action} after negative feedback`);
+      } else if (res?.action === "retained") {
+        api.logger.info(`evolveclaw: guideline ${recentGuideline.guidelineId} retained after positive feedback`);
+      }
+    });
+  }
+
   api.logger.info(
-    `evolveclaw: activated (server=${config.serverUrl}, agent=${config.agentName}, inject=${config.injectMode})`,
+    `evolveclaw: activated (server=${config.serverUrl}, agent=${config.agentName}, inject=${config.injectMode}, maxGuidelines=${config.maxGuidelines}, feedback=${config.feedbackEnabled})`,
   );
 }
 
 // ── Helpers ──
 
-function formatGuidelinesBlock(guidelines: string): string {
-  return [
+function formatGuidelinesBlock(guidelines: GuidelineEntry[]): string {
+  const lines: string[] = [
     "## Learned Guidelines (EvolveClaw/SCOPE)",
     "The following guidelines were synthesized from prior execution traces.",
-    "Follow them to improve response quality:",
+    "Follow them to improve response quality. If guidelines conflict, prefer the more recent one.",
     "",
-    guidelines,
-  ].join("\n");
+  ];
+
+  // Strategic guidelines first (highest priority).
+  const strategic = guidelines.filter((g) => g.type === "strategic");
+  if (strategic.length > 0) {
+    lines.push("### Strategic (cross-task, persistent)");
+    for (const g of strategic) lines.push(g.text);
+    lines.push("");
+  }
+
+  // Seed guidelines.
+  const seed = guidelines.filter((g) => g.type === "seed");
+  if (seed.length > 0) {
+    lines.push("### Baseline");
+    for (const g of seed) lines.push(g.text);
+    lines.push("");
+  }
+
+  // Tactical guidelines (most recent last → highest recency priority).
+  const tactical = guidelines.filter((g) => g.type === "tactical");
+  if (tactical.length > 0) {
+    lines.push("### Tactical (current task)");
+    for (const g of tactical) lines.push(g.text);
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 function buildInjectionResult(
@@ -152,5 +369,7 @@ function buildInjectionResult(
       return { prependContext: block };
     case "both":
       return { appendSystemContext: block, prependContext: block };
+    case "auto":
+      return { appendSystemContext: block };
   }
 }
