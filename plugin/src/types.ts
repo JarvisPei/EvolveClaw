@@ -1,6 +1,6 @@
 // ── Plugin configuration ──
 
-export type InjectMode = "append_system" | "prepend_context" | "both" | "auto";
+export type InjectMode = "append_system" | "prepend_context";
 
 export type EvolveClawConfig = {
   serverUrl: string;
@@ -8,7 +8,6 @@ export type EvolveClawConfig = {
   enabled: boolean;
   injectMode: InjectMode;
   maxGuidelines: number;
-  strategicRefreshInterval: number;
 };
 
 // ── Guideline with metadata ──
@@ -16,8 +15,6 @@ export type EvolveClawConfig = {
 export type GuidelineEntry = {
   text: string;
   type: "tactical" | "strategic";
-  createdAt: number;
-  injectionCount: number;
   guidelineId?: string;
 };
 

@@ -20,7 +20,7 @@
       },
       "injectMode": {
         "type": "string",
-        "enum": ["append_system", "prepend_context", "both", "auto"],
+        "enum": ["append_system", "prepend_context"],
         "default": "append_system"
       },
       "maxGuidelines": {
@@ -28,11 +28,6 @@
         "default": 30,
         "minimum": 5,
         "maximum": 200
-      },
-      "strategicRefreshInterval": {
-        "type": "number",
-        "default": 10,
-        "minimum": 1
       }
     }
   },
@@ -51,15 +46,11 @@
     },
     "injectMode": {
       "label": "Injection Mode",
-      "help": "Where to inject SCOPE guidelines: append_system (cacheable), prepend_context (per-turn), both, or auto (dynamically switches based on guideline volume)."
+      "help": "Where to inject SCOPE guidelines: append_system (cacheable) or prepend_context (per-turn)."
     },
     "maxGuidelines": {
       "label": "Max Guidelines",
       "help": "Maximum number of guidelines to keep in memory. Oldest tactical guidelines are evicted first when the cap is reached."
-    },
-    "strategicRefreshInterval": {
-      "label": "Strategic Refresh Interval",
-      "help": "Re-fetch strategic rules from the SCOPE server every N steps to pick up newly promoted rules."
     }
   }
 }

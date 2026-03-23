@@ -8,7 +8,6 @@ const DEFAULT_CONFIG: EvolveClawConfig = {
   enabled: true,
   injectMode: "append_system",
   maxGuidelines: 30,
-  strategicRefreshInterval: 10,
 };
 
 function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
@@ -19,7 +18,6 @@ function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
     enabled: cfg.enabled ?? DEFAULT_CONFIG.enabled,
     injectMode: cfg.injectMode ?? DEFAULT_CONFIG.injectMode,
     maxGuidelines: cfg.maxGuidelines ?? DEFAULT_CONFIG.maxGuidelines,
-    strategicRefreshInterval: cfg.strategicRefreshInterval ?? DEFAULT_CONFIG.strategicRefreshInterval,
   };
 }
 
@@ -60,12 +58,7 @@ export default function register(api: OpenClawPluginApi) {
   // ── Cold start: load strategic rules from SCOPE server ──
   client.getStrategicRules(config.agentName).then((res) => {
     if (res?.rules) {
-      guidelines.push({
-        text: res.rules,
-        type: "strategic",
-        createdAt: Date.now(),
-        injectionCount: 0,
-      });
+      guidelines.push({ text: res.rules, type: "strategic" });
       api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s) from SCOPE server`);
     }
   });
@@ -82,43 +75,16 @@ export default function register(api: OpenClawPluginApi) {
     api.logger.info(`evolveclaw: guideline cap enforced, ${guidelines.length} remaining`);
   }
 
-  function resolveInjectMode(): InjectMode {
-    if (config.injectMode !== "auto") return config.injectMode;
-    const totalLen = guidelines.reduce((acc, g) => acc + g.text.length, 0);
-    // Heuristic: if guidelines exceed ~4000 chars, switch to prepend_context
-    // to avoid oversized system prompts that may get cached inefficiently.
-    return totalLen > 4000 ? "prepend_context" : "append_system";
-  }
-
-  function extractTaskSummary(prompt: string, sessionId: string): string {
-    // Extract a meaningful task description from the user's input.
-    const messages = prompt.split(/\n/).filter(Boolean);
-    // Look for the last user-like line (heuristic).
-    const userLines = messages.filter(
-      (line) => !line.startsWith("#") && !line.startsWith("```") && line.length > 10,
-    );
-    const lastMeaningful = userLines.pop();
-    if (lastMeaningful) {
-      const truncated = lastMeaningful.length > 200
-        ? lastMeaningful.slice(0, 200) + "..."
-        : lastMeaningful;
-      return truncated;
+  function extractTaskSummary(
+    messages: Array<{ role: string; content?: string }> | undefined,
+    sessionId: string,
+  ): string {
+    const lastUserMsg = messages?.filter((m) => m.role === "user").pop();
+    if (lastUserMsg?.content) {
+      const text = lastUserMsg.content.trim();
+      return text.length > 200 ? text.slice(0, 200) + "..." : text;
     }
     return `Session ${sessionId}: agent task`;
-  }
-
-  async function refreshStrategicRules() {
-    const res = await client.getStrategicRules(config.agentName);
-    if (!res?.rules) return;
-    // Replace existing strategic entries with fresh ones from server.
-    guidelines = guidelines.filter((g) => g.type !== "strategic");
-    guidelines.push({
-      text: res.rules,
-      type: "strategic",
-      createdAt: Date.now(),
-      injectionCount: 0,
-    });
-    api.logger.info(`evolveclaw: refreshed ${res.rule_count} strategic rule(s)`);
   }
 
   // ── Hook: before_prompt_build ──
@@ -138,22 +104,11 @@ export default function register(api: OpenClawPluginApi) {
     }
     previousSessionId = currentSessionId;
 
-    // Periodic strategic refresh.
-    if (stepCount > 0 && stepCount % config.strategicRefreshInterval === 0) {
-      refreshStrategicRules();
-    }
-
     const activeGuidelines = guidelines.filter((g) => g.text);
     if (activeGuidelines.length === 0) return {};
 
-    // Increment injection counts for observability.
-    for (const g of activeGuidelines) {
-      g.injectionCount++;
-    }
-
     const block = formatGuidelinesBlock(activeGuidelines);
-    const mode = resolveInjectMode();
-    return buildInjectionResult(block, mode);
+    return buildInjectionResult(block, config.injectMode);
   });
 
   // ── Hook: llm_output ──
@@ -195,8 +150,7 @@ export default function register(api: OpenClawPluginApi) {
 
     const messages = (event as { messages?: Array<{ role: string; content?: string }> }).messages;
     const lastAssistant = messages?.filter((m) => m.role === "assistant").pop();
-
-    const taskDescription = extractTaskSummary(currentSystemPrompt, currentSessionId);
+    const taskDescription = extractTaskSummary(messages, currentSessionId);
 
     const stepResult = await client.onStepComplete({
       agent_name: config.agentName,
@@ -214,8 +168,6 @@ export default function register(api: OpenClawPluginApi) {
       guidelines.push({
         text: stepResult.guideline,
         type: stepResult.guideline_type ?? "tactical",
-        createdAt: Date.now(),
-        injectionCount: 0,
         guidelineId: stepResult.guideline_id,
       });
       guidelinesSynthesized++;
@@ -278,14 +230,6 @@ function buildInjectionResult(
   block: string,
   mode: InjectMode,
 ): Record<string, string> {
-  switch (mode) {
-    case "append_system":
-      return { appendSystemContext: block };
-    case "prepend_context":
-      return { prependContext: block };
-    case "both":
-      return { appendSystemContext: block, prependContext: block };
-    case "auto":
-      return { appendSystemContext: block };
-  }
+  if (mode === "prepend_context") return { prependContext: block };
+  return { appendSystemContext: block };
 }

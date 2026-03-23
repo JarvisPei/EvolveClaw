@@ -45,16 +45,16 @@ Unlike static prompt engineering or manual rule files, EvolveClaw implements a *
 
 ### Personalized Learning Signal
 - **Rich execution traces**: Captures model output, tool calls (`before_tool_call`), tool results (`after_tool_call`), and errors — learning from the full behavioral footprint, not just text
-- **Task description**: Passed to SCOPE for per-task guideline management
-  - *TODO: `extractTaskSummary()` currently parses the system prompt text, not the user's actual messages. Needs to extract task intent from user input or conversation context instead.*
+- **Task description**: The user's last message is extracted and passed to SCOPE for per-task guideline management
 
 ### Adaptive Memory
 - **Strategic memory** — Cross-task guidelines that persist to disk. Loaded on startup, refreshed periodically
 - **Tactical memory** — Task-specific guidelines that live in-memory and auto-clear on session switch
 - **Guideline cap** — Enforces a maximum; evicts oldest tactical guidelines first
 
-### Adaptive Injection
-- **Auto mode** — Dynamically switches between `append_system` and `prepend_context` based on guideline volume
+### Injection Modes
+- **`append_system`** (default) — Guidelines are appended to the system prompt, which LLM providers typically cache for token efficiency
+- **`prepend_context`** — Guidelines are prepended to the per-turn context, sent fresh each turn
 
 ### Observability
 - **Periodic logging** — The plugin logs guideline distribution by type every 5 steps
@@ -62,10 +62,8 @@ Unlike static prompt engineering or manual rule files, EvolveClaw implements a *
 
 ## TODOs and Known Limitations
 
-- [ ] **`extractTaskSummary()`** — Currently parses the system prompt string, not the user's messages. Needs rework to extract task intent from conversation context in the `agent_end` event.
-- [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). A future `/feedback` endpoint or CLI tool could be added once SCOPE supports `remove_strategic_rule()`.
-- [ ] **`GuidelineEntry.injectionCount` / `createdAt`** — Tracked but never read by any logic. Could be used for analytics or eviction policy.
-- [ ] **Auto inject mode threshold** — The 4000-char threshold is an untested heuristic.
+- [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). Could be added once SCOPE supports guideline removal or OpenClaw adds a feedback hook.
+- [ ] **`extractTaskSummary()`** — Uses the last user message from the `agent_end` event. The exact shape of `event.messages` needs verification against a live OpenClaw instance.
 
 ## Architecture
 
@@ -131,9 +129,8 @@ In `~/.openclaw/openclaw.json`:
         "config": {
           "serverUrl": "http://127.0.0.1:5757",
           "agentName": "openclaw-agent",
-          "injectMode": "auto",
+          "injectMode": "append_system",
           "maxGuidelines": 30,
-          "strategicRefreshInterval": 10,
         }
       }
     }
@@ -148,9 +145,8 @@ In `~/.openclaw/openclaw.json`:
 | `serverUrl` | `http://127.0.0.1:5757` | SCOPE sidecar URL |
 | `agentName` | `openclaw-agent` | Agent identifier in SCOPE memory |
 | `enabled` | `true` | Toggle on/off without uninstalling |
-| `injectMode` | `append_system` | `append_system` (cacheable), `prepend_context` (per-turn), `both`, or `auto` (switches dynamically based on guideline volume) |
+| `injectMode` | `append_system` | `append_system` (cacheable) or `prepend_context` (per-turn) |
 | `maxGuidelines` | `30` | Max guidelines in memory; oldest tactical evicted first when cap is reached |
-| `strategicRefreshInterval` | `10` | Re-fetch strategic rules from SCOPE server every N steps |
 
 ### Server Configuration (Environment Variables)
 
