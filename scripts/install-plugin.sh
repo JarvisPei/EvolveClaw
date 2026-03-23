@@ -15,7 +15,7 @@ if [ ! -d "$OPENCLAW_EXT_DIR" ]; then
     mkdir -p "$OPENCLAW_EXT_DIR"
 fi
 
-TARGET="$OPENCLAW_EXT_DIR/evolveclaw-scope"
+TARGET="$OPENCLAW_EXT_DIR/evolveclaw"
 
 if [ -L "$TARGET" ] || [ -d "$TARGET" ]; then
     echo "Removing existing installation at $TARGET"
@@ -27,7 +27,7 @@ ln -s "$(cd "$PLUGIN_DIR" && pwd)" "$TARGET"
 
 echo ""
 echo "Done! Now enable the plugin:"
-echo "  openclaw plugins enable evolveclaw-scope"
+echo "  openclaw plugins enable evolveclaw"
 echo ""
 echo "Then restart the gateway:"
 echo "  openclaw gateway restart"
