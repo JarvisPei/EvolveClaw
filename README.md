@@ -84,6 +84,8 @@ For more details, see [OpenClaw Getting Started](https://docs.openclaw.ai/start/
 
 ### 1. Start the SCOPE Server
 
+> **Important:** The SCOPE server must be running **before** you start/restart the OpenClaw gateway. The plugin loads strategic rules from the server at startup — if the server is not reachable, previously learned guidelines won't be available until the next turn.
+
 ```bash
 cd server
 cp .env.template .env
