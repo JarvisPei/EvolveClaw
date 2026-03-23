@@ -1,6 +1,6 @@
 # EvolveClaw
 
-**##A self-evolving, personalized OpenClaw — the more you use it, the better it understands you.**
+## A self-evolving, personalized OpenClaw — the more you use it, the better it understands you. 
 
 EvolveClaw turns [OpenClaw](https://github.com/openclaw/openclaw) into a **self-improving agent** that continuously adapts to *your* workflows. Powered by [SCOPE](https://github.com/JarvisPei/SCOPE) (Self-evolving Context Optimization via Prompt Evolution), it observes how you interact with the agent — your tasks, your tool usage patterns, your feedback — and **automatically evolves the system prompt** with personalized guidelines that make the agent increasingly effective for *you*, not just any user.
 
