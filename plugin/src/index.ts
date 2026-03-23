@@ -172,22 +172,17 @@ export default function register(api: OpenClawPluginApi) {
     // Lazy retry: if startup fetch failed (server wasn't ready), try now.
     // Won't help THIS turn (async) but will be ready for the next one.
     if (!s.strategicLoaded) {
-      api.logger.info("evolveclaw: strategic rules not loaded yet, retrying...");
       loadStrategicRules();
     }
 
     const activeGuidelines = s.guidelines.filter((g) => g.text);
-    if (activeGuidelines.length === 0) {
-      api.logger.info("evolveclaw: before_prompt_build — no guidelines to inject");
-      return {};
-    }
+    if (activeGuidelines.length === 0) return {};
 
     const block = formatGuidelinesBlock(activeGuidelines);
-    const injection = buildInjectionResult(block, config.injectMode);
     api.logger.info(
-      `evolveclaw: before_prompt_build — injecting ${activeGuidelines.length} guideline(s) via ${config.injectMode} (${block.length} chars)`,
+      `evolveclaw: injecting ${activeGuidelines.length} guideline(s) via ${config.injectMode} (${block.length} chars)`,
     );
-    return injection;
+    return buildInjectionResult(block, config.injectMode);
   });
 
   // ── Hook: llm_output ──
