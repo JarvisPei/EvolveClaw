@@ -81,13 +81,26 @@ export default function register(api: OpenClawPluginApi) {
   }
 
   function extractTaskSummary(
-    messages: Array<{ role: string; content?: string }> | undefined,
+    messages: Array<{ role: string; content?: unknown }> | undefined,
     sessionId: string,
   ): string {
     const lastUserMsg = messages?.filter((m) => m.role === "user").pop();
     if (lastUserMsg?.content) {
-      const text = lastUserMsg.content.trim();
-      return text.length > 200 ? text.slice(0, 200) + "..." : text;
+      // content may be a plain string or an array of content blocks
+      // (e.g. [{ type: "text", text: "..." }])
+      let text: string;
+      if (typeof lastUserMsg.content === "string") {
+        text = lastUserMsg.content;
+      } else if (Array.isArray(lastUserMsg.content)) {
+        text = lastUserMsg.content
+          .filter((b: { type?: string }) => b.type === "text")
+          .map((b: { text?: string }) => b.text ?? "")
+          .join(" ");
+      } else {
+        text = String(lastUserMsg.content);
+      }
+      text = text.trim();
+      if (text) return text.length > 200 ? text.slice(0, 200) + "..." : text;
     }
     return `Session ${sessionId}: agent task`;
   }
@@ -164,15 +177,27 @@ export default function register(api: OpenClawPluginApi) {
 
     stepCount++;
 
-    const messages = (event as { messages?: Array<{ role: string; content?: string }> }).messages;
-    const lastAssistant = messages?.filter((m) => m.role === "assistant").pop();
+    const messages = (event as { messages?: Array<{ role: string; content?: unknown }> }).messages;
     const taskDescription = extractTaskSummary(messages, currentSessionId);
+
+    // Assistant content is an array of blocks: [{ type: "text", text: "..." }]
+    let fallbackOutput = "";
+    if (!currentModelOutput) {
+      const lastAssistant = messages?.filter((m) => m.role === "assistant").pop();
+      const c = lastAssistant?.content;
+      if (typeof c === "string") fallbackOutput = c;
+      else if (Array.isArray(c))
+        fallbackOutput = c
+          .filter((b: { type?: string }) => b.type === "text")
+          .map((b: { text?: string }) => b.text ?? "")
+          .join("\n");
+    }
 
     const stepResult = await client.onStepComplete({
       agent_name: config.agentName,
       agent_role: "OpenClaw AI Assistant",
       task: taskDescription,
-      model_output: currentModelOutput || lastAssistant?.content || "",
+      model_output: currentModelOutput || fallbackOutput,
       tool_calls: currentToolCalls.length > 0 ? currentToolCalls.join("\n---\n") : undefined,
       observations: currentObservations.length > 0 ? currentObservations.join("\n---\n") : undefined,
       error: currentError || undefined,

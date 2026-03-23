@@ -1,7 +1,11 @@
-# EvolveClaw
+<p align="center">
+  <img src="asserts/evolveclaw.png" alt="EvolveClaw Logo" width="500">
+</p>
 
-## A self-evolving, personalized OpenClaw 
-### The more you use it, the better it understands you. 
+<p align="center">
+  <strong>A self-evolving, personalized OpenClaw</strong><br>
+  The more you use it, the better it understands you.
+</p>
 
 EvolveClaw turns [OpenClaw](https://github.com/openclaw/openclaw) into a **self-improving agent** that continuously adapts to *your* workflows. Powered by [SCOPE](https://github.com/JarvisPei/SCOPE) (Self-evolving Context Optimization via Prompt Evolution), it observes how you interact with the agent — your tasks, your tool usage patterns, your preferences — and **automatically evolves the system prompt** with personalized guidelines that make the agent increasingly effective for *you*, not just any user.
 
@@ -87,7 +91,6 @@ OpenClaw internally spawns sub-agents (file search, code lookup, etc.) that use 
 ## TODOs and Known Limitations
 
 - [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). Could be added once SCOPE supports guideline removal or OpenClaw adds a feedback hook.
-- [ ] **`extractTaskSummary()`** — Uses the last user message from the `agent_end` event. The exact shape of `event.messages` needs verification against a live OpenClaw instance.
 
 ## Architecture
 
