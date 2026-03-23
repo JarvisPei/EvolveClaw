@@ -89,6 +89,7 @@ class AgentMetrics:
     def __init__(self):
         self.total_steps: int = 0
         self.guidelines_synthesized: int = 0
+        self.recent_steps: list[float] = []
 
 agent_metrics: dict[str, AgentMetrics] = defaultdict(AgentMetrics)
 
