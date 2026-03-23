@@ -92,20 +92,23 @@ export default function register(api: OpenClawPluginApi) {
   const client = new ScopeClient(config.serverUrl);
   const s = getState();
 
-  // ── Cold start: load strategic rules (only once across all registrations) ──
-  const g = globalThis as Record<string, unknown>;
-  api.logger.info(`evolveclaw: register() — globalThis key exists: ${!!g[GLOBAL_KEY]}, strategicLoaded: ${s.strategicLoaded}, guidelines.length: ${s.guidelines.length}`);
-
-  if (!s.strategicLoaded) {
-    s.strategicLoaded = true;
-    client.getStrategicRules(config.agentName).then((res) => {
+  // ── Load strategic rules (with retry on first hook if startup fetch failed) ──
+  function loadStrategicRules() {
+    return client.getStrategicRules(config.agentName).then((res) => {
       if (res?.rules) {
-        s.guidelines.push({ text: res.rules, type: "strategic" });
-        api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s), guidelines.length now: ${s.guidelines.length}`);
+        // Avoid duplicate entries on retry
+        s.guidelines = s.guidelines.filter((g) => g.type !== "strategic");
+        s.guidelines.unshift({ text: res.rules, type: "strategic" });
+        s.strategicLoaded = true;
+        api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s), guidelines.length: ${s.guidelines.length}`);
       } else {
         api.logger.info("evolveclaw: no strategic rules found on SCOPE server");
       }
     });
+  }
+
+  if (!s.strategicLoaded) {
+    loadStrategicRules();
   }
 
   // ── Guideline management helpers ──
@@ -166,8 +169,12 @@ export default function register(api: OpenClawPluginApi) {
     }
     s.previousSessionId = s.currentSessionId;
 
-    const gCheck = globalThis as Record<string, unknown>;
-    api.logger.info(`evolveclaw: before_prompt_build — globalThis key exists: ${!!gCheck[GLOBAL_KEY]}, guidelines.length: ${s.guidelines.length}, strategicLoaded: ${s.strategicLoaded}`);
+    // Lazy retry: if startup fetch failed (server wasn't ready), try now.
+    // Won't help THIS turn (async) but will be ready for the next one.
+    if (!s.strategicLoaded) {
+      api.logger.info("evolveclaw: strategic rules not loaded yet, retrying...");
+      loadStrategicRules();
+    }
 
     const activeGuidelines = s.guidelines.filter((g) => g.text);
     if (activeGuidelines.length === 0) {
