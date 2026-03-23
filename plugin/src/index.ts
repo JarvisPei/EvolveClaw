@@ -1,6 +1,6 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { ScopeClient } from "./scope-client.js";
-import type { EvolveClawConfig, GuidelineEntry, InjectMode } from "./types.js";
+import type { ConfigureRequest, EvolveClawConfig, GuidelineEntry, InjectMode } from "./types.js";
 
 const DEFAULT_CONFIG: EvolveClawConfig = {
   serverUrl: "http://127.0.0.1:5757",
@@ -18,7 +18,95 @@ function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
     enabled: cfg.enabled ?? DEFAULT_CONFIG.enabled,
     injectMode: cfg.injectMode ?? DEFAULT_CONFIG.injectMode,
     maxGuidelines: cfg.maxGuidelines ?? DEFAULT_CONFIG.maxGuidelines,
+    scopeModel: cfg.scopeModel,
+    scopeProvider: cfg.scopeProvider,
+    scopeApiKey: cfg.scopeApiKey,
+    scopeBaseUrl: cfg.scopeBaseUrl,
   };
+}
+
+const API_TYPE_TO_SCOPE_PROVIDER: Record<string, string> = {
+  "anthropic-messages": "anthropic",
+  "openai-completions": "openai",
+  "openai-responses": "openai",
+  "openai-codex-responses": "openai",
+};
+
+async function forwardOpenClawModelConfig(
+  api: OpenClawPluginApi,
+  client: ScopeClient,
+  config: EvolveClawConfig,
+): Promise<void> {
+  // If explicit key + model are both set in plugin config, use them directly
+  if (config.scopeApiKey && config.scopeModel) {
+    const res = await client.configure({
+      provider: config.scopeProvider ?? "anthropic",
+      model: config.scopeModel,
+      api_key: config.scopeApiKey,
+      base_url: config.scopeBaseUrl,
+    });
+    if (res?.status === "ok") {
+      api.logger.info("evolveclaw: forwarded explicit SCOPE config to server");
+    } else if (res?.status === "skipped") {
+      api.logger.info(`evolveclaw: server skipped config (${res.reason})`);
+    }
+    return;
+  }
+
+  // Auto-detect from OpenClaw's model settings
+  const ocConfig = (api as Record<string, unknown>).config as Record<string, unknown> | undefined;
+  if (!ocConfig) return;
+
+  const agents = ocConfig.agents as Record<string, unknown> | undefined;
+  const defaults = agents?.defaults as Record<string, unknown> | undefined;
+  const modelCfg = defaults?.model as Record<string, unknown> | undefined;
+  const primaryModel = modelCfg?.primary as string | undefined;
+
+  if (!primaryModel || !primaryModel.includes("/")) {
+    api.logger.info("evolveclaw: no provider/model primary found in OpenClaw config, skipping auto-config");
+    return;
+  }
+
+  const slashIdx = primaryModel.indexOf("/");
+  const providerName = primaryModel.slice(0, slashIdx);
+  const modelId = config.scopeModel ?? primaryModel.slice(slashIdx + 1);
+
+  const models = ocConfig.models as Record<string, unknown> | undefined;
+  const providers = models?.providers as Record<string, Record<string, unknown>> | undefined;
+  const providerCfg = providers?.[providerName];
+  const baseUrl = config.scopeBaseUrl ?? (providerCfg?.baseUrl as string | undefined);
+  const apiType = providerCfg?.api as string | undefined;
+  const provider = config.scopeProvider ?? API_TYPE_TO_SCOPE_PROVIDER[apiType ?? ""] ?? "litellm";
+
+  let apiKey = config.scopeApiKey;
+  if (!apiKey) {
+    try {
+      const runtime = (api as Record<string, unknown>).runtime as Record<string, unknown> | undefined;
+      const modelAuth = runtime?.modelAuth as {
+        resolveApiKeyForProvider: (p: { provider: string }) => Promise<{ apiKey?: string }>;
+      } | undefined;
+      if (modelAuth) {
+        const auth = await modelAuth.resolveApiKeyForProvider({ provider: providerName });
+        apiKey = auth?.apiKey;
+      }
+    } catch {
+      api.logger.info(`evolveclaw: failed to resolve API key for provider '${providerName}'`);
+      return;
+    }
+  }
+
+  if (!apiKey) {
+    api.logger.info(`evolveclaw: no API key resolved for '${providerName}', skipping auto-config`);
+    return;
+  }
+
+  const req: ConfigureRequest = { provider, model: modelId, api_key: apiKey, base_url: baseUrl };
+  const res = await client.configure(req);
+  if (res?.status === "ok") {
+    api.logger.info(`evolveclaw: auto-configured SCOPE with OpenClaw's ${providerName}/${modelId} (provider=${provider})`);
+  } else if (res?.status === "skipped") {
+    api.logger.info(`evolveclaw: server skipped auto-config (${res.reason})`);
+  }
 }
 
 const SIDE_TRIGGERS = new Set(["heartbeat", "memory", "cron"]);
@@ -46,6 +134,7 @@ interface EvolveClawState {
   currentError: string;
   skipCurrentSession: boolean;
   strategicLoaded: boolean;
+  configForwarded: boolean;
 }
 
 const GLOBAL_KEY = "__evolveclaw_state__";
@@ -67,6 +156,7 @@ function getState(): EvolveClawState {
       currentError: "",
       skipCurrentSession: false,
       strategicLoaded: false,
+      configForwarded: false,
     };
   }
   return g[GLOBAL_KEY] as EvolveClawState;
@@ -91,6 +181,12 @@ export default function register(api: OpenClawPluginApi) {
 
   const client = new ScopeClient(config.serverUrl);
   const s = getState();
+
+  // ── Forward OpenClaw's LLM config to the SCOPE server (once) ──
+  if (!s.configForwarded) {
+    s.configForwarded = true;
+    forwardOpenClawModelConfig(api, client, config).catch(() => {});
+  }
 
   // ── Load strategic rules (with retry on first hook if startup fetch failed) ──
   function loadStrategicRules() {

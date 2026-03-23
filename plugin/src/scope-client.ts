@@ -1,4 +1,6 @@
 import type {
+  ConfigureRequest,
+  ConfigureResponse,
   HealthResponse,
   RulesResponse,
   StatsResponse,
@@ -35,6 +37,10 @@ export class ScopeClient {
 
   async resetTactical(agentName: string, taskId?: string): Promise<void> {
     await this.post("/reset", { agent_name: agentName, task_id: taskId });
+  }
+
+  async configure(req: ConfigureRequest): Promise<ConfigureResponse | null> {
+    return this.post<ConfigureResponse>("/configure", req);
   }
 
   async getStats(agentName: string): Promise<StatsResponse | null> {

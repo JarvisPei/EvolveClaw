@@ -11,6 +11,7 @@ Endpoints:
     GET  /stats/{agent_name}    - Get observability stats for an agent
     POST /step                  - Report a completed step for analysis
     POST /reset                 - Reset tactical state for a task
+    POST /configure             - Forward LLM config from OpenClaw plugin
 """
 
 import logging
@@ -24,7 +25,7 @@ from pydantic import BaseModel
 from config import ServerConfig
 from prompts import EVOLVECLAW_DOMAINS, get_custom_prompts
 from scope import SCOPEOptimizer
-from scope.models import create_anthropic_model, create_litellm_model, create_openai_model
+from scope.models import create_litellm_model, create_openai_model
 from scope.models.anthropic_adapter import AnthropicAdapter
 
 logging.basicConfig(
@@ -37,51 +38,63 @@ cfg = ServerConfig()
 
 app = FastAPI(
     title="EvolveClaw SCOPE Server",
-    version="0.2.0",
+    version="0.3.0",
     description="Sidecar server for SCOPE prompt evolution with OpenClaw — self-improving agent loop",
 )
 
-# ── Model + optimizer initialization ──
+# ── Model + optimizer initialization (supports lazy init) ──
 
-def create_model():
-    if cfg.SCOPE_PROVIDER == "anthropic":
+optimizer: SCOPEOptimizer | None = None
+
+
+def _create_model(provider: str, model_name: str, api_key: str | None, base_url: str | None):
+    if provider == "anthropic":
         from anthropic import AsyncAnthropic
-        client_kwargs = {}
-        if cfg.SCOPE_API_KEY:
-            client_kwargs["api_key"] = cfg.SCOPE_API_KEY
-        if cfg.SCOPE_BASE_URL:
-            client_kwargs["base_url"] = cfg.SCOPE_BASE_URL
+        client_kwargs: dict[str, str] = {}
+        if api_key:
+            client_kwargs["api_key"] = api_key
+        if base_url:
+            client_kwargs["base_url"] = base_url
         client = AsyncAnthropic(**client_kwargs)
-        return AnthropicAdapter(client, model=cfg.SCOPE_MODEL)
-    if cfg.SCOPE_PROVIDER == "openai":
-        return create_openai_model(cfg.SCOPE_MODEL, api_key=cfg.SCOPE_API_KEY)
-    return create_litellm_model(
-        cfg.SCOPE_MODEL, api_key=cfg.SCOPE_API_KEY, base_url=cfg.SCOPE_BASE_URL,
+        return AnthropicAdapter(client, model=model_name)
+    if provider == "openai":
+        return create_openai_model(model_name, api_key=api_key)
+    return create_litellm_model(model_name, api_key=api_key, base_url=base_url)
+
+
+def init_optimizer(provider: str, model_name: str, api_key: str | None, base_url: str | None):
+    global optimizer
+    model = _create_model(provider, model_name, api_key, base_url)
+    optimizer = SCOPEOptimizer(
+        synthesizer_model=model,
+        exp_path=cfg.SCOPE_DATA_PATH,
+        enable_quality_analysis=cfg.SCOPE_QUALITY_ANALYSIS,
+        quality_analysis_frequency=cfg.SCOPE_QUALITY_FREQUENCY,
+        auto_accept_threshold=cfg.SCOPE_ACCEPT_THRESHOLD,
+        strategic_confidence_threshold=cfg.SCOPE_STRATEGIC_THRESHOLD,
+        max_rules_per_task=cfg.SCOPE_MAX_RULES_PER_TASK,
+        max_strategic_rules_per_domain=cfg.SCOPE_MAX_STRATEGIC_PER_DOMAIN,
+        synthesis_mode=cfg.SCOPE_SYNTHESIS_MODE,
+        custom_prompts=get_custom_prompts(),
+        custom_domains=EVOLVECLAW_DOMAINS,
+    )
+    logger.info(
+        "SCOPE optimizer initialized (model=%s, provider=%s, data=%s)",
+        model_name, provider, cfg.SCOPE_DATA_PATH,
     )
 
-model = create_model()
-optimizer = SCOPEOptimizer(
-    synthesizer_model=model,
-    exp_path=cfg.SCOPE_DATA_PATH,
-    enable_quality_analysis=cfg.SCOPE_QUALITY_ANALYSIS,
-    quality_analysis_frequency=cfg.SCOPE_QUALITY_FREQUENCY,
-    auto_accept_threshold=cfg.SCOPE_ACCEPT_THRESHOLD,
-    strategic_confidence_threshold=cfg.SCOPE_STRATEGIC_THRESHOLD,
-    max_rules_per_task=cfg.SCOPE_MAX_RULES_PER_TASK,
-    max_strategic_rules_per_domain=cfg.SCOPE_MAX_STRATEGIC_PER_DOMAIN,
-    synthesis_mode=cfg.SCOPE_SYNTHESIS_MODE,
-    custom_prompts=get_custom_prompts(),
-    custom_domains=EVOLVECLAW_DOMAINS,
-)
+
+# Eagerly initialize if .env provides LLM config; otherwise wait for /configure
+if cfg.has_explicit_llm_config():
+    _provider = cfg.SCOPE_PROVIDER or "openai"
+    _model = cfg.SCOPE_MODEL or "gpt-4o-mini"
+    init_optimizer(_provider, _model, cfg.SCOPE_API_KEY, cfg.SCOPE_BASE_URL)
+else:
+    logger.info(
+        "No LLM credentials in env — server will wait for POST /configure from the EvolveClaw plugin"
+    )
 
 start_time = time.time()
-
-logger.info(
-    "SCOPE optimizer initialized (model=%s, provider=%s, data=%s)",
-    cfg.SCOPE_MODEL,
-    cfg.SCOPE_PROVIDER,
-    cfg.SCOPE_DATA_PATH,
-)
 
 # ── In-memory metrics per agent ──
 
@@ -123,9 +136,20 @@ class ResetRequest(BaseModel):
     agent_name: str
     task_id: str | None = None
 
+class ConfigureRequest(BaseModel):
+    provider: str
+    model: str
+    api_key: str
+    base_url: str | None = None
+
+class ConfigureResponse(BaseModel):
+    status: str = "ok"
+    reason: str | None = None
+
 class HealthResponse(BaseModel):
     status: str = "ok"
-    version: str = "0.2.0"
+    version: str = "0.3.0"
+    configured: bool = True
 
 class StatsResponse(BaseModel):
     strategic_count: int = 0
@@ -139,12 +163,35 @@ class StatsResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    return HealthResponse()
+    return HealthResponse(configured=optimizer is not None)
+
+
+@app.post("/configure", response_model=ConfigureResponse)
+async def configure(req: ConfigureRequest):
+    """
+    Accept LLM config forwarded from the EvolveClaw plugin.
+
+    If the server already has explicit .env credentials, this is a no-op
+    (env config takes priority). Otherwise, (re-)initializes the model
+    and optimizer with the provided credentials.
+    """
+    if cfg.has_explicit_llm_config() and optimizer is not None:
+        return ConfigureResponse(status="skipped", reason="server has explicit .env credentials")
+
+    try:
+        init_optimizer(req.provider, req.model, req.api_key, req.base_url)
+    except Exception as exc:
+        logger.warning("Failed to initialize from /configure: %s", exc, exc_info=True)
+        return ConfigureResponse(status="error", reason=str(exc))
+
+    return ConfigureResponse(status="ok")
 
 
 @app.get("/rules/{agent_name}", response_model=RulesResponse)
 async def get_rules(agent_name: str):
     """Load persisted strategic rules for the given agent."""
+    if optimizer is None:
+        return RulesResponse()
     rules_text = optimizer.get_strategic_rules_for_agent(agent_name)
     rule_count = rules_text.strip().count("\n") + 1 if rules_text.strip() else 0
     return RulesResponse(rules=rules_text, rule_count=rule_count)
@@ -164,6 +211,9 @@ async def on_step_complete(req: StepRequest):
     metrics.recent_steps.append(time.time())
     # Keep only last 100 timestamps for rate calculation.
     metrics.recent_steps = metrics.recent_steps[-100:]
+
+    if optimizer is None:
+        return StepResponse(skipped=True, reason="optimizer not configured yet")
 
     has_context = any([req.model_output, req.error, req.tool_calls, req.observations])
     if not has_context:
@@ -222,6 +272,8 @@ async def on_step_complete(req: StepRequest):
 @app.post("/reset")
 async def reset_tactical(req: ResetRequest):
     """Reset tactical (in-memory) state. Called on /new or task switch."""
+    if optimizer is None:
+        return {"status": "ok"}
     logger.info("Tactical reset for agent=%s task=%s", req.agent_name, req.task_id)
     try:
         if hasattr(optimizer, "reset_tactical"):
@@ -241,7 +293,7 @@ async def get_stats(agent_name: str):
     """
     metrics = agent_metrics[agent_name]
 
-    rules_text = optimizer.get_strategic_rules_for_agent(agent_name)
+    rules_text = optimizer.get_strategic_rules_for_agent(agent_name) if optimizer else ""
     strategic_count = rules_text.strip().count("\n") + 1 if rules_text.strip() else 0
 
     rate = 0.0

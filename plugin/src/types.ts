@@ -8,6 +8,10 @@ export type EvolveClawConfig = {
   enabled: boolean;
   injectMode: InjectMode;
   maxGuidelines: number;
+  scopeModel?: string;
+  scopeProvider?: string;
+  scopeApiKey?: string;
+  scopeBaseUrl?: string;
 };
 
 // ── Guideline with metadata ──
@@ -57,4 +61,18 @@ export type StatsResponse = {
   guidelines_synthesized: number;
   recent_synthesis_rate: number;
   uptime_seconds: number;
+};
+
+// ── SCOPE server configuration (forwarded from OpenClaw) ──
+
+export type ConfigureRequest = {
+  provider: string;
+  model: string;
+  api_key: string;
+  base_url?: string;
+};
+
+export type ConfigureResponse = {
+  status: "ok" | "skipped";
+  reason?: string;
 };

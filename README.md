@@ -16,6 +16,7 @@
 
 ## 📰 News
 
+- **[2026/03]** 🔥 **Zero-config LLM setup** — SCOPE server now auto-detects OpenClaw's model configuration. No `.env` needed if OpenClaw already has an API key configured!
 - **[2026/03]** 🔥 Added **custom SCOPE prompts & domains** tailored for personal AI assistants — user preference learning, code quality analysis, and communication style optimization!
 - **[2026/03]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE).
 
@@ -88,10 +89,14 @@ For more details, see [OpenClaw Getting Started](https://docs.openclaw.ai/start/
 
 ```bash
 cd server
-cp .env.template .env
-# Edit .env with your API key and preferences
-
 pip install -r requirements.txt
+
+# If OpenClaw already has a model configured, just start:
+python server.py
+
+# Or, to use a specific LLM for SCOPE (overrides auto-detection):
+cp .env.template .env
+# Edit .env with your API key and preferences, then:
 python server.py
 ```
 
@@ -149,6 +154,12 @@ In `~/.openclaw/openclaw.json`:
 | `enabled` | `true` | Toggle on/off without uninstalling |
 | `injectMode` | `append_system` | `append_system` (cacheable) or `prepend_context` (per-turn) |
 | `maxGuidelines` | `30` | Max guidelines in memory; oldest tactical evicted first when cap is reached |
+| `scopeModel` | *(auto from OpenClaw)* | Override the model SCOPE uses for guideline synthesis (e.g., `gpt-4o-mini` for cheaper synthesis) |
+| `scopeProvider` | *(auto from OpenClaw)* | Override the SCOPE provider: `anthropic`, `openai`, or `litellm` |
+| `scopeApiKey` | *(auto from OpenClaw)* | Override the API key SCOPE uses |
+| `scopeBaseUrl` | *(auto from OpenClaw)* | Override the base URL for SCOPE's LLM API |
+
+> **LLM auto-detection:** By default, EvolveClaw reads OpenClaw's primary model configuration (`api.config.models.providers` + `api.config.agents.defaults.model.primary`) and forwards it to the SCOPE server at startup. No duplicate API key configuration needed. Set the `scope*` fields above only if you want SCOPE to use a different (e.g., cheaper) model than OpenClaw.
 
 #### ⚡ Server Configuration (Environment Variables)
 
@@ -156,8 +167,8 @@ In `~/.openclaw/openclaw.json`:
 |----------|---------|-------------|
 | `EVOLVECLAW_HOST` | `127.0.0.1` | Server bind address |
 | `EVOLVECLAW_PORT` | `5757` | Server port |
-| `EVOLVECLAW_SCOPE_MODEL` | `gpt-4o-mini` | LLM for guideline synthesis |
-| `EVOLVECLAW_SCOPE_PROVIDER` | `openai` | `openai` or LiteLLM provider |
+| `EVOLVECLAW_SCOPE_MODEL` | *(auto from plugin)* | LLM for guideline synthesis; set only to override auto-detection |
+| `EVOLVECLAW_SCOPE_PROVIDER` | *(auto from plugin)* | `anthropic`, `openai`, or `litellm`; set only to override auto-detection |
 | `EVOLVECLAW_SCOPE_DATA` | `./scope_data` | Directory for persistent strategic rules |
 | `EVOLVECLAW_SYNTHESIS_MODE` | `efficiency` | `efficiency` (fast) or `thoroughness` (comprehensive) |
 | `EVOLVECLAW_QUALITY_ANALYSIS` | `true` | Analyze successful steps too |
@@ -315,11 +326,12 @@ New guidelines only appear on the **next** turn, after the background synthesis 
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/health` | Health check |
+| `GET` | `/health` | Health check (includes `configured` flag) |
 | `GET` | `/rules/{agent_name}` | Get strategic rules for an agent |
 | `GET` | `/stats/{agent_name}` | Get observability metrics for self-improvement tracking |
 | `POST` | `/step` | Report a completed step for SCOPE analysis |
 | `POST` | `/reset` | Reset tactical state on session/task switch |
+| `POST` | `/configure` | Forward LLM config from plugin (auto-called at startup) |
 
 </details>
 

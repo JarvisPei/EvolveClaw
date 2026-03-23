@@ -28,6 +28,19 @@
         "default": 30,
         "minimum": 5,
         "maximum": 200
+      },
+      "scopeModel": {
+        "type": "string"
+      },
+      "scopeProvider": {
+        "type": "string",
+        "enum": ["anthropic", "openai", "litellm"]
+      },
+      "scopeApiKey": {
+        "type": "string"
+      },
+      "scopeBaseUrl": {
+        "type": "string"
       }
     }
   },
@@ -51,6 +64,22 @@
     "maxGuidelines": {
       "label": "Max Guidelines",
       "help": "Maximum number of guidelines to keep in memory. Oldest tactical guidelines are evicted first when the cap is reached."
+    },
+    "scopeModel": {
+      "label": "SCOPE Model Override",
+      "help": "Override the LLM model used by SCOPE for guideline synthesis (e.g. gpt-4o-mini). Defaults to OpenClaw's primary model."
+    },
+    "scopeProvider": {
+      "label": "SCOPE Provider Override",
+      "help": "Override the LLM provider for SCOPE (anthropic, openai, litellm). Auto-detected from OpenClaw's model config by default."
+    },
+    "scopeApiKey": {
+      "label": "SCOPE API Key Override",
+      "help": "Override the API key used by SCOPE. Defaults to OpenClaw's configured key for the primary model provider."
+    },
+    "scopeBaseUrl": {
+      "label": "SCOPE Base URL Override",
+      "help": "Override the base URL for SCOPE's LLM API. Defaults to OpenClaw's configured provider base URL."
     }
   }
 }
