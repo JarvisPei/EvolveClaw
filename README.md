@@ -26,6 +26,19 @@ No two EvolveClaw instances are the same. Over time, each one develops a unique 
 
 **Key adaptation**: SCOPE was originally designed for task-specific benchmarks (e.g., HLE). EvolveClaw extends it with **custom prompt templates and domain categories** tailored for a personal AI coding assistant — focusing on user preference learning, code quality, communication style, and workflow patterns instead of domain-specific problem-solving heuristics.
 
+## 📝 Contents
+
+- [💡 Why EvolveClaw?](#-why-evolveclaw)
+- [⚙️ How It Works](#️-how-it-works)
+- [🚀 Quick Start](#-quick-start)
+- [🧬 What Makes It Self-Evolving](#-what-makes-it-self-evolving)
+- [🏗️ Architecture](#️-architecture)
+- [🎯 Design Decisions](#-design-decisions)
+- [🔌 API Endpoints](#-api-endpoints)
+- [📖 Citation](#-citation)
+
+---
+
 ## 💡 Why EvolveClaw?
 
 Today's AI coding agents ship with a static system prompt — every user gets the same instructions. But users are different: some prefer terse answers, others want detailed explanations; some rely heavily on search tools, others write code directly; some work on frontends, others on distributed systems.
@@ -51,75 +64,6 @@ EvolveClaw closes this gap with three core ideas:
 5. **Forget** — When you start a new session, tactical guidelines are cleared. The agent remembers *who you are* (strategic), not *what you were doing yesterday* (tactical)
 
 This creates a **virtuous cycle**: the more you use the agent, the better it understands your preferences, and the more personalized its behavior becomes.
-
-## 🧬 What Makes It Self-Evolving
-
-Unlike static prompt engineering or manual rule files, EvolveClaw implements a **self-improvement loop** with the following components:
-
-### 🎯 Personalized Learning Signal
-- **Rich execution traces**: Captures model output, tool calls (`before_tool_call`), tool results (`after_tool_call`), and errors — learning from the full behavioral footprint, not just text
-- **Task description**: The user's last message is extracted and passed to SCOPE for per-task guideline management
-
-### 🧠 Adaptive Memory
-- **Strategic memory** — Cross-task guidelines that persist to disk. Loaded on startup
-- **Tactical memory** — Task-specific guidelines that live in-memory and auto-clear on session switch
-- **Automatic memory optimization** — When strategic rules accumulate past the domain limit, SCOPE's `MemoryOptimizer` automatically consolidates similar rules, prunes rules subsumed by more general ones, and resolves conflicts — all via LLM-driven analysis, not simple truncation
-- **Plugin-side guideline cap** — The plugin enforces a maximum guideline count in memory; oldest tactical guidelines are evicted first when the cap is reached
-
-### 🎨 Custom SCOPE Prompts & Domains
-
-SCOPE's built-in prompts are designed for task-specific benchmarks. EvolveClaw overrides them via SCOPE's `custom_prompts` and `custom_domains` API (`server/prompts.py`) to focus on personal assistant concerns:
-
-| Domain | What It Captures |
-|--------|-----------------|
-| `tool_usage` | IDE/shell tool patterns — file ops, search, terminal commands |
-| `code_quality` | Code generation patterns, style, correctness, testing |
-| `error_handling` | Safe operations, rollback strategies, error recovery |
-| `communication` | Response style, conciseness, explanation depth |
-| `user_preferences` | Learned user habits — coding style, frameworks, conventions |
-| `context_awareness` | Project structure knowledge, conversation history |
-| `workflow` | Multi-step task planning, edit-test cycles |
-| `general` | Catch-all for uncategorized rules |
-
-The `user_preferences` domain is particularly important: when the analyzer detects consistent user habits (e.g., "always uses TypeScript", "prefers concise responses"), these are classified as **strategic** and persist across sessions — so the assistant remembers your preferences permanently.
-
-### 🔇 Sub-Agent Filtering
-
-OpenClaw internally spawns sub-agents (file search, code lookup, etc.) that use minimal system prompts. EvolveClaw filters these out — only the main user-facing session generates guidelines. Sub-agent sessions are detected by the `"subagent:"` prefix in the session key and silently skipped across all hooks.
-
-### 💉 Injection Modes
-- **`append_system`** (default) — Guidelines are appended to the system prompt, which LLM providers typically cache for token efficiency
-- **`prepend_context`** — Guidelines are prepended to the per-turn context, sent fresh each turn
-
-### 📊 Observability
-- **Periodic logging** — The plugin logs guideline distribution by type every 5 steps
-- **Stats endpoint** — `GET /stats/{agent_name}` returns strategic count, total steps, synthesis rate, and uptime
-
-## 📋 TODOs and Known Limitations
-
-- [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). Could be added once SCOPE supports guideline removal or OpenClaw adds a feedback hook.
-
-## 🏗️ Architecture
-
-```
-evolveclaw/
-├── plugin/                    # OpenClaw TypeScript plugin
-│   ├── src/
-│   │   ├── index.ts           # Plugin entry: lifecycle hooks, guideline management
-│   │   ├── scope-client.ts    # HTTP client for SCOPE sidecar
-│   │   └── types.ts           # Shared type definitions (config, API, guideline metadata)
-│   ├── package.json
-│   └── openclaw.plugin.json   # Plugin manifest with config schema
-├── server/                    # SCOPE sidecar HTTP server (Python)
-│   ├── server.py              # FastAPI server: step analysis, tactical reset, stats
-│   ├── config.py              # Server configuration (env vars)
-│   ├── prompts.py             # Custom SCOPE prompts & domains for personal assistant use
-│   ├── requirements.txt
-│   └── .env.template          # Environment variable template
-└── scripts/
-    ├── start-server.sh        # Start the SCOPE sidecar
-    └── install-plugin.sh      # Symlink plugin into OpenClaw
-```
 
 ## 🚀 Quick Start
 
@@ -151,7 +95,8 @@ openclaw plugins enable evolveclaw-scope
 openclaw gateway restart
 ```
 
-### 3. Configure (Optional)
+<details>
+<summary><b>3. Configure (Optional)</b></summary>
 
 In `~/.openclaw/openclaw.json`:
 
@@ -173,7 +118,7 @@ In `~/.openclaw/openclaw.json`:
 }
 ```
 
-### 🔧 Plugin Configuration
+#### 🔧 Plugin Configuration
 
 | Config | Default | Description |
 |--------|---------|-------------|
@@ -183,7 +128,7 @@ In `~/.openclaw/openclaw.json`:
 | `injectMode` | `append_system` | `append_system` (cacheable) or `prepend_context` (per-turn) |
 | `maxGuidelines` | `30` | Max guidelines in memory; oldest tactical evicted first when cap is reached |
 
-### ⚡ Server Configuration (Environment Variables)
+#### ⚡ Server Configuration (Environment Variables)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -200,7 +145,104 @@ In `~/.openclaw/openclaw.json`:
 | `EVOLVECLAW_MAX_RULES_PER_TASK` | `20` | Max rules SCOPE keeps per task |
 | `EVOLVECLAW_MAX_STRATEGIC_PER_DOMAIN` | `10` | Max strategic rules per domain |
 
-## 🎯 Design Decisions
+</details>
+
+## 🧬 What Makes It Self-Evolving
+
+Unlike static prompt engineering or manual rule files, EvolveClaw implements a **self-improvement loop** with the following components:
+
+<details>
+<summary><b>🎯 Personalized Learning Signal</b></summary>
+
+- **Rich execution traces**: Captures model output, tool calls (`before_tool_call`), tool results (`after_tool_call`), and errors — learning from the full behavioral footprint, not just text
+- **Task description**: The user's last message is extracted and passed to SCOPE for per-task guideline management
+
+</details>
+
+<details>
+<summary><b>🧠 Adaptive Memory</b></summary>
+
+- **Strategic memory** — Cross-task guidelines that persist to disk. Loaded on startup
+- **Tactical memory** — Task-specific guidelines that live in-memory and auto-clear on session switch
+- **Automatic memory optimization** — When strategic rules accumulate past the domain limit, SCOPE's `MemoryOptimizer` automatically consolidates similar rules, prunes rules subsumed by more general ones, and resolves conflicts — all via LLM-driven analysis, not simple truncation
+- **Plugin-side guideline cap** — The plugin enforces a maximum guideline count in memory; oldest tactical guidelines are evicted first when the cap is reached
+
+</details>
+
+<details>
+<summary><b>🎨 Custom SCOPE Prompts & Domains</b></summary>
+
+SCOPE's built-in prompts are designed for task-specific benchmarks. EvolveClaw overrides them via SCOPE's `custom_prompts` and `custom_domains` API (`server/prompts.py`) to focus on personal assistant concerns:
+
+| Domain | What It Captures |
+|--------|-----------------|
+| `tool_usage` | IDE/shell tool patterns — file ops, search, terminal commands |
+| `code_quality` | Code generation patterns, style, correctness, testing |
+| `error_handling` | Safe operations, rollback strategies, error recovery |
+| `communication` | Response style, conciseness, explanation depth |
+| `user_preferences` | Learned user habits — coding style, frameworks, conventions |
+| `context_awareness` | Project structure knowledge, conversation history |
+| `workflow` | Multi-step task planning, edit-test cycles |
+| `general` | Catch-all for uncategorized rules |
+
+The `user_preferences` domain is particularly important: when the analyzer detects consistent user habits (e.g., "always uses TypeScript", "prefers concise responses"), these are classified as **strategic** and persist across sessions — so the assistant remembers your preferences permanently.
+
+</details>
+
+<details>
+<summary><b>🔇 Sub-Agent Filtering</b></summary>
+
+OpenClaw internally spawns sub-agents (file search, code lookup, etc.) that use minimal system prompts. EvolveClaw filters these out — only the main user-facing session generates guidelines. Sub-agent sessions are detected by the `"subagent:"` prefix in the session key and silently skipped across all hooks.
+
+</details>
+
+<details>
+<summary><b>💉 Injection Modes</b></summary>
+
+- **`append_system`** (default) — Guidelines are appended to the system prompt, which LLM providers typically cache for token efficiency
+- **`prepend_context`** — Guidelines are prepended to the per-turn context, sent fresh each turn
+
+</details>
+
+<details>
+<summary><b>📊 Observability</b></summary>
+
+- **Periodic logging** — The plugin logs guideline distribution by type every 5 steps
+- **Stats endpoint** — `GET /stats/{agent_name}` returns strategic count, total steps, synthesis rate, and uptime
+
+</details>
+
+<details>
+<summary><b>🏗️ Architecture</b></summary>
+
+```
+evolveclaw/
+├── plugin/                    # OpenClaw TypeScript plugin
+│   ├── src/
+│   │   ├── index.ts           # Plugin entry: lifecycle hooks, guideline management
+│   │   ├── scope-client.ts    # HTTP client for SCOPE sidecar
+│   │   └── types.ts           # Shared type definitions (config, API, guideline metadata)
+│   ├── package.json
+│   └── openclaw.plugin.json   # Plugin manifest with config schema
+├── server/                    # SCOPE sidecar HTTP server (Python)
+│   ├── server.py              # FastAPI server: step analysis, tactical reset, stats
+│   ├── config.py              # Server configuration (env vars)
+│   ├── prompts.py             # Custom SCOPE prompts & domains for personal assistant use
+│   ├── requirements.txt
+│   └── .env.template          # Environment variable template
+└── scripts/
+    ├── start-server.sh        # Start the SCOPE sidecar
+    └── install-plugin.sh      # Symlink plugin into OpenClaw
+```
+
+</details>
+
+## 📋 TODOs and Known Limitations
+
+- [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). Could be added once SCOPE supports guideline removal or OpenClaw adds a feedback hook.
+
+<details>
+<summary><b>🎯 Design Decisions</b></summary>
 
 ### Why self-evolving prompts (not fine-tuning)?
 
@@ -229,7 +271,10 @@ In `~/.openclaw/openclaw.json`:
 | **Strategic** | Cross-task | Saved to disk — your agent's evolved personality | Loaded on startup + periodic refresh | Highest |
 | **Tactical** | Current task | In-memory only — ephemeral working memory | Cleared on session switch | Lowest (most recent wins) |
 
-## 🔌 API Endpoints
+</details>
+
+<details>
+<summary><b>🔌 API Endpoints</b></summary>
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -238,6 +283,8 @@ In `~/.openclaw/openclaw.json`:
 | `GET` | `/stats/{agent_name}` | Get observability metrics for self-improvement tracking |
 | `POST` | `/step` | Report a completed step for SCOPE analysis |
 | `POST` | `/reset` | Reset tactical state on session/task switch |
+
+</details>
 
 ## 🔗 Related Projects
 
