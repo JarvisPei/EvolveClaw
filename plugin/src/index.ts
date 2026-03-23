@@ -27,22 +27,50 @@ function isSubagentSession(sessionKey: string): boolean {
   return sessionKey.toLowerCase().includes("subagent:");
 }
 
-// ── Module-level shared state ──
-// OpenClaw may call register() multiple times (different registration modes).
-// State must live at module scope so all instances share the same guidelines.
-let guidelines: GuidelineEntry[] = [];
-let currentSystemPrompt = "";
-let currentModelOutput = "";
-let currentTrigger = "";
-let currentSessionId = "";
-let previousSessionId = "";
-let stepCount = 0;
-let guidelinesSynthesized = 0;
-let currentToolCalls: string[] = [];
-let currentObservations: string[] = [];
-let currentError = "";
-let skipCurrentSession = false;
-let strategicLoaded = false;
+// ── Process-global shared state ──
+// OpenClaw loads the plugin module in multiple contexts (gateway, plugins, etc.)
+// each getting a separate module instance. globalThis is the only way to share
+// state across all of them within the same Node.js process.
+
+interface EvolveClawState {
+  guidelines: GuidelineEntry[];
+  currentSystemPrompt: string;
+  currentModelOutput: string;
+  currentTrigger: string;
+  currentSessionId: string;
+  previousSessionId: string;
+  stepCount: number;
+  guidelinesSynthesized: number;
+  currentToolCalls: string[];
+  currentObservations: string[];
+  currentError: string;
+  skipCurrentSession: boolean;
+  strategicLoaded: boolean;
+}
+
+const GLOBAL_KEY = "__evolveclaw_state__";
+
+function getState(): EvolveClawState {
+  const g = globalThis as Record<string, unknown>;
+  if (!g[GLOBAL_KEY]) {
+    g[GLOBAL_KEY] = {
+      guidelines: [],
+      currentSystemPrompt: "",
+      currentModelOutput: "",
+      currentTrigger: "",
+      currentSessionId: "",
+      previousSessionId: "",
+      stepCount: 0,
+      guidelinesSynthesized: 0,
+      currentToolCalls: [],
+      currentObservations: [],
+      currentError: "",
+      skipCurrentSession: false,
+      strategicLoaded: false,
+    };
+  }
+  return g[GLOBAL_KEY] as EvolveClawState;
+}
 
 /**
  * EvolveClaw SCOPE Plugin — Self-Improving Agent Prompt Evolution
@@ -62,14 +90,17 @@ export default function register(api: OpenClawPluginApi) {
   }
 
   const client = new ScopeClient(config.serverUrl);
+  const s = getState();
 
   // ── Cold start: load strategic rules (only once across all registrations) ──
-  if (!strategicLoaded) {
-    strategicLoaded = true;
+  if (!s.strategicLoaded) {
+    s.strategicLoaded = true;
     client.getStrategicRules(config.agentName).then((res) => {
       if (res?.rules) {
-        guidelines.push({ text: res.rules, type: "strategic" });
+        s.guidelines.push({ text: res.rules, type: "strategic" });
         api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s) from SCOPE server`);
+      } else {
+        api.logger.info("evolveclaw: no strategic rules found on SCOPE server");
       }
     });
   }
@@ -77,13 +108,13 @@ export default function register(api: OpenClawPluginApi) {
   // ── Guideline management helpers ──
 
   function enforceGuidelineCap() {
-    if (guidelines.length <= config.maxGuidelines) return;
-    const tactical = guidelines.filter((g) => g.type === "tactical");
-    const strategic = guidelines.filter((g) => g.type === "strategic");
+    if (s.guidelines.length <= config.maxGuidelines) return;
+    const tactical = s.guidelines.filter((g) => g.type === "tactical");
+    const strategic = s.guidelines.filter((g) => g.type === "strategic");
     const budget = Math.max(0, config.maxGuidelines - strategic.length);
     const retained = tactical.slice(-budget);
-    guidelines = [...strategic, ...retained];
-    api.logger.info(`evolveclaw: guideline cap enforced, ${guidelines.length} remaining`);
+    s.guidelines = [...strategic, ...retained];
+    api.logger.info(`evolveclaw: guideline cap enforced, ${s.guidelines.length} remaining`);
   }
 
   function extractTaskSummary(
@@ -111,28 +142,28 @@ export default function register(api: OpenClawPluginApi) {
 
   // ── Hook: before_prompt_build ──
   api.on("before_prompt_build", (event, ctx) => {
-    currentSystemPrompt = event.prompt ?? "";
-    currentTrigger = ctx.trigger ?? "";
-    currentSessionId = ctx.sessionId ?? "";
+    s.currentSystemPrompt = event.prompt ?? "";
+    s.currentTrigger = ctx.trigger ?? "";
+    s.currentSessionId = ctx.sessionId ?? "";
 
-    if (SIDE_TRIGGERS.has(currentTrigger)) return {};
+    if (SIDE_TRIGGERS.has(s.currentTrigger)) return {};
 
-    skipCurrentSession = isSubagentSession(currentSessionId);
-    if (skipCurrentSession) {
-      api.logger.debug(`evolveclaw: skipping sub-agent session ${currentSessionId}`);
+    s.skipCurrentSession = isSubagentSession(s.currentSessionId);
+    if (s.skipCurrentSession) {
+      api.logger.debug(`evolveclaw: skipping sub-agent session ${s.currentSessionId}`);
       return {};
     }
 
     // Session switch detection → tactical reset.
-    if (previousSessionId && previousSessionId !== currentSessionId) {
-      const tacticalCount = guidelines.filter((g) => g.type === "tactical").length;
-      guidelines = guidelines.filter((g) => g.type !== "tactical");
-      client.resetTactical(config.agentName, previousSessionId);
+    if (s.previousSessionId && s.previousSessionId !== s.currentSessionId) {
+      const tacticalCount = s.guidelines.filter((g) => g.type === "tactical").length;
+      s.guidelines = s.guidelines.filter((g) => g.type !== "tactical");
+      client.resetTactical(config.agentName, s.previousSessionId);
       api.logger.info(`evolveclaw: session switch detected, cleared ${tacticalCount} tactical guideline(s)`);
     }
-    previousSessionId = currentSessionId;
+    s.previousSessionId = s.currentSessionId;
 
-    const activeGuidelines = guidelines.filter((g) => g.text);
+    const activeGuidelines = s.guidelines.filter((g) => g.text);
     if (activeGuidelines.length === 0) {
       api.logger.info("evolveclaw: before_prompt_build — no guidelines to inject");
       return {};
@@ -148,49 +179,49 @@ export default function register(api: OpenClawPluginApi) {
 
   // ── Hook: llm_output ──
   api.on("llm_output", (event) => {
-    if (skipCurrentSession) return;
+    if (s.skipCurrentSession) return;
     if (event.text) {
-      currentModelOutput = event.text;
+      s.currentModelOutput = event.text;
     }
   });
 
   // ── Hook: before_tool_call (capture tool name + input) ──
   api.on("before_tool_call", (event) => {
-    if (skipCurrentSession) return;
+    if (s.skipCurrentSession) return;
     const { name, input } = event as { name?: string; input?: unknown };
     const summary = `[tool: ${name ?? "unknown"}] ${JSON.stringify(input ?? {}).slice(0, 500)}`;
-    currentToolCalls.push(summary);
+    s.currentToolCalls.push(summary);
   });
 
   // ── Hook: after_tool_call (capture tool result or error) ──
   api.on("after_tool_call", (event) => {
-    if (skipCurrentSession) return;
+    if (s.skipCurrentSession) return;
     const { output, error } = event as { output?: string; error?: string };
     if (error) {
-      currentError = error.slice(0, 1000);
+      s.currentError = error.slice(0, 1000);
     }
     if (output) {
-      currentObservations.push(output.slice(0, 1000));
+      s.currentObservations.push(output.slice(0, 1000));
     }
   });
 
   // ── Hook: agent_end ──
   api.on("agent_end", async (event) => {
-    if (skipCurrentSession || SIDE_TRIGGERS.has(currentTrigger)) {
-      currentModelOutput = "";
-      currentToolCalls = [];
-      currentObservations = [];
-      currentError = "";
+    if (s.skipCurrentSession || SIDE_TRIGGERS.has(s.currentTrigger)) {
+      s.currentModelOutput = "";
+      s.currentToolCalls = [];
+      s.currentObservations = [];
+      s.currentError = "";
       return;
     }
 
-    stepCount++;
+    s.stepCount++;
 
     const messages = (event as { messages?: Array<{ role: string; content?: unknown }> }).messages;
-    const taskDescription = extractTaskSummary(messages, currentSessionId);
+    const taskDescription = extractTaskSummary(messages, s.currentSessionId);
 
     let fallbackOutput = "";
-    if (!currentModelOutput) {
+    if (!s.currentModelOutput) {
       const lastAssistant = messages?.filter((m) => m.role === "assistant").pop();
       const c = lastAssistant?.content;
       if (typeof c === "string") fallbackOutput = c;
@@ -205,39 +236,39 @@ export default function register(api: OpenClawPluginApi) {
       agent_name: config.agentName,
       agent_role: "OpenClaw AI Assistant",
       task: taskDescription,
-      model_output: currentModelOutput || fallbackOutput,
-      tool_calls: currentToolCalls.length > 0 ? currentToolCalls.join("\n---\n") : undefined,
-      observations: currentObservations.length > 0 ? currentObservations.join("\n---\n") : undefined,
-      error: currentError || undefined,
-      current_system_prompt: currentSystemPrompt,
-      task_id: currentSessionId,
+      model_output: s.currentModelOutput || fallbackOutput,
+      tool_calls: s.currentToolCalls.length > 0 ? s.currentToolCalls.join("\n---\n") : undefined,
+      observations: s.currentObservations.length > 0 ? s.currentObservations.join("\n---\n") : undefined,
+      error: s.currentError || undefined,
+      current_system_prompt: s.currentSystemPrompt,
+      task_id: s.currentSessionId,
     });
 
     if (stepResult?.guideline && !stepResult.skipped) {
-      guidelines.push({
+      s.guidelines.push({
         text: stepResult.guideline,
         type: stepResult.guideline_type ?? "tactical",
         guidelineId: stepResult.guideline_id,
       });
-      guidelinesSynthesized++;
+      s.guidelinesSynthesized++;
       enforceGuidelineCap();
       api.logger.info(
-        `evolveclaw: new ${stepResult.guideline_type} guideline synthesized (total: ${guidelines.length}, synthesized: ${guidelinesSynthesized})`,
+        `evolveclaw: new ${stepResult.guideline_type} guideline synthesized (total: ${s.guidelines.length}, synthesized: ${s.guidelinesSynthesized})`,
       );
     }
 
-    if (stepCount % 5 === 0) {
-      const strategic = guidelines.filter((g) => g.type === "strategic").length;
-      const tactical = guidelines.filter((g) => g.type === "tactical").length;
+    if (s.stepCount % 5 === 0) {
+      const strategic = s.guidelines.filter((g) => g.type === "strategic").length;
+      const tactical = s.guidelines.filter((g) => g.type === "tactical").length;
       api.logger.info(
-        `evolveclaw: [stats] steps=${stepCount} guidelines=${guidelines.length} (strategic=${strategic} tactical=${tactical}) synthesized=${guidelinesSynthesized}`,
+        `evolveclaw: [stats] steps=${s.stepCount} guidelines=${s.guidelines.length} (strategic=${strategic} tactical=${tactical}) synthesized=${s.guidelinesSynthesized}`,
       );
     }
 
-    currentModelOutput = "";
-    currentToolCalls = [];
-    currentObservations = [];
-    currentError = "";
+    s.currentModelOutput = "";
+    s.currentToolCalls = [];
+    s.currentObservations = [];
+    s.currentError = "";
   });
 
   api.logger.info(
