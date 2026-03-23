@@ -1,30 +1,70 @@
 # EvolveClaw
 
-**Evolve OpenClaw's system prompt through self-improving guidelines — powered by SCOPE.**
+**A self-evolving, personalized OpenClaw — the more you use it, the better it understands you.**
 
-EvolveClaw integrates [SCOPE](https://github.com/JarvisPei/SCOPE) (Self-evolving Context Optimization via Prompt Evolution) with [OpenClaw](https://github.com/openclaw/openclaw) as an external plugin, requiring **zero modifications** to OpenClaw's core code. It evolves the *system prompt* by synthesizing guidelines from execution traces, making the agent increasingly effective the more you use it.
+EvolveClaw turns [OpenClaw](https://github.com/openclaw/openclaw) into a **self-improving agent** that continuously adapts to *your* workflows. Powered by [SCOPE](https://github.com/JarvisPei/SCOPE) (Self-evolving Context Optimization via Prompt Evolution), it observes how you interact with the agent — your tasks, your tool usage patterns, your feedback — and **automatically evolves the system prompt** with personalized guidelines that make the agent increasingly effective for *you*, not just any user.
+
+No two EvolveClaw instances are the same. Over time, each one develops a unique personality shaped by its owner's habits.
+
+## Why EvolveClaw?
+
+Today's AI coding agents ship with a static system prompt — every user gets the same instructions. But users are different: some prefer terse answers, others want detailed explanations; some rely heavily on search tools, others write code directly; some work on frontends, others on distributed systems.
+
+EvolveClaw closes this gap with three core ideas:
+
+| Principle | What It Means |
+|-----------|--------------|
+| **Self-Evolving** | The agent synthesizes behavioral guidelines from its own execution traces. No manual prompt engineering needed — the system prompt improves itself. |
+| **Personalized** | Guidelines are derived from *your* interactions — your tasks, your feedback, your tool usage patterns. The agent adapts to how *you* work, not a generic user profile. |
+| **Closed-Loop** | User feedback (👍/👎) directly drives guideline retention and retirement. The agent doesn't just accumulate rules — it prunes what doesn't work for you. |
 
 ## How It Works
 
 ```
-User ↔ OpenClaw ↔ LLM
-         ↕ (plugin hooks)
-    EvolveClaw Plugin (TypeScript)
-         ↕ (HTTP)
-    SCOPE Sidecar Server (Python)
-         ↕
-    Strategic Memory (disk) + Feedback Store (in-memory)
+You ↔ OpenClaw ↔ LLM
+        ↕ (plugin hooks)
+   EvolveClaw Plugin (TypeScript)
+        ↕ (HTTP)
+   SCOPE Sidecar Server (Python)
+        ↕
+   Your Personal Strategic Memory (disk)
 ```
 
-1. **`before_prompt_build`** — The plugin injects accumulated SCOPE guidelines into the system prompt via `appendSystemContext`, with session-switch detection that clears tactical guidelines
-2. **`llm_output`** — The plugin captures the model's response
-3. **`tool_use` / `tool_result` / `tool_error`** — The plugin captures tool calls, observations, and errors for richer learning signal
-4. **`agent_end`** — The plugin sends the full step context (model output + tool calls + observations + errors + semantic task description) to the SCOPE server for analysis
-5. **SCOPE synthesizes** a new guideline (if warranted) → classified as tactical (task-specific) or strategic (cross-task, persisted), assigned a unique ID for feedback tracking
-6. **`user_feedback`** — User ratings (👍/👎) are sent to the SCOPE server; guidelines that consistently receive negative feedback are retired
-7. **Next turn** — The new guideline is injected into the prompt, improving the agent's behavior
+1. **Observe** — The plugin captures your full interaction trace: model output, tool calls, observations, errors, and the semantic nature of your task
+2. **Learn** — SCOPE analyzes each trace and synthesizes a guideline if warranted — e.g., *"When this user asks for refactoring, prefer small atomic commits over large rewrites"*
+3. **Classify** — Each guideline is classified as **tactical** (task-specific, ephemeral) or **strategic** (cross-task, persisted to disk as part of your personal memory)
+4. **Inject** — On the next turn, all active guidelines are injected into the system prompt, structured by priority (strategic > seed > tactical)
+5. **Feedback** — Your ratings (👍/👎) flow back to the SCOPE server. Guidelines that consistently hurt are **retired**; those that help are **reinforced**
+6. **Forget** — When you start a new session, tactical guidelines are cleared. The agent remembers *who you are* (strategic), not *what you were doing yesterday* (tactical)
 
-Over time, the agent accumulates a library of learned guidelines that make it increasingly effective for the user's specific workflows. The feedback loop ensures low-quality guidelines are retired, not just accumulated.
+This creates a **virtuous cycle**: the more you use the agent, the better it understands your preferences, and the more personalized its behavior becomes.
+
+## What Makes It Self-Evolving
+
+Unlike static prompt engineering or manual rule files, EvolveClaw implements a **complete self-improvement loop** — every component listed below operates automatically with zero human intervention:
+
+### Personalized Learning Signal
+- **Rich execution traces**: Captures model output, tool calls, tool results, and errors — learning from the full behavioral footprint, not just text
+- **Semantic task understanding**: Derives meaningful task descriptions from your prompts, enabling per-task and per-domain guideline management (e.g., "debugging" vs "feature implementation" get different rules)
+
+### Adaptive Memory
+- **Strategic memory** — Cross-task guidelines that persist to disk and define your agent's evolved personality. Loaded on every startup, refreshed periodically
+- **Tactical memory** — Task-specific guidelines that live in-memory and auto-clear on session switch, preventing context bloat
+- **Seed guidelines** — Bootstrap a new agent with baseline behaviors from a file, then let evolution take over
+- **Guideline cap** — Enforces a maximum; evicts oldest tactical guidelines first while preserving your strategic and seed rules
+- **Conflict resolution** — Guidelines are layered by type with recency-based priority. The LLM is instructed to prefer the most recent guideline when conflicts arise
+
+### Closed-Loop Feedback
+- **User ratings** — 👍/👎 on agent responses route directly to the SCOPE server
+- **Guideline retirement** — Guidelines that accumulate negative feedback are automatically removed from injection
+- **Strategic demotion** — Persistent guidelines that you consistently dislike are removed from disk storage
+
+### Adaptive Injection
+- **Auto mode** — Dynamically switches between `append_system` (cacheable, for small guideline sets) and `prepend_context` (per-turn, for large sets) based on total guideline volume
+
+### Observability
+- **Stats endpoint** — `GET /stats/{agent_name}` returns live metrics: total steps analyzed, guidelines synthesized/retired, synthesis rate, active domains, uptime
+- **Periodic logging** — The plugin logs guideline distribution by type every 5 steps, so you can see the agent's evolution in real time
 
 ## Architecture
 
@@ -56,7 +96,6 @@ cd server
 cp .env.template .env
 # Edit .env with your API key and preferences
 
-# Install and run
 pip install -r requirements.txt
 python server.py
 ```
@@ -114,7 +153,7 @@ In `~/.openclaw/openclaw.json`:
 | `maxGuidelines` | `30` | Max guidelines in memory; oldest tactical evicted first when cap is reached |
 | `seedGuidelinesPath` | `""` | Path to a text file with initial guidelines for cold start |
 | `strategicRefreshInterval` | `10` | Re-fetch strategic rules from SCOPE server every N steps |
-| `feedbackEnabled` | `true` | Enable user feedback (👍/👎) loop for guideline retention/retirement |
+| `feedbackEnabled` | `true` | Enable user feedback loop for guideline retention/retirement |
 
 ### Server Configuration (Environment Variables)
 
@@ -135,59 +174,35 @@ In `~/.openclaw/openclaw.json`:
 | `EVOLVECLAW_FEEDBACK_NEGATIVE_RETIRE` | `3` | Retire guideline after N negative ratings |
 | `EVOLVECLAW_FEEDBACK_POSITIVE_PROMOTE` | `5` | Reinforce retention after N positive ratings |
 
-## Self-Improving Capabilities
-
-EvolveClaw implements a full **closed-loop self-improvement** cycle:
-
-### Learning
-- **Rich execution traces**: Captures model output, tool calls, observations, and errors — not just text responses
-- **Semantic task extraction**: Derives meaningful task descriptions from prompts instead of fixed strings, enabling per-task and per-domain rule management
-
-### Memory Management
-- **Tactical reset**: Automatically clears task-specific guidelines on session switch, preventing context window bloat
-- **Guideline cap**: Enforces a configurable maximum; evicts oldest tactical guidelines first while preserving strategic and seed rules
-- **Conflict resolution**: Guidelines are structured by type (strategic → seed → tactical) with recency-based priority and an explicit meta-instruction for the LLM
-
-### Feedback Loop
-- **User ratings**: 👍/👎 feedback on agent responses is routed to the SCOPE server
-- **Guideline retirement**: Guidelines that accumulate negative feedback are automatically retired and removed from injection
-- **Strategic demotion**: Negative feedback on strategic guidelines triggers removal from persistent storage
-
-### Cold Start
-- **Seed guidelines**: Load initial guidelines from a text file (`seedGuidelinesPath`) to bootstrap new agents with baseline behaviors
-
-### Adaptive Injection
-- **Auto mode**: `injectMode: "auto"` dynamically switches between `append_system` (cacheable, for small guideline sets) and `prepend_context` (per-turn, for large guideline sets) based on total guideline volume
-
-### Observability
-- **Stats endpoint**: `GET /stats/{agent_name}` returns live metrics — total steps, guidelines synthesized/retired, synthesis rate, domains, uptime
-- **Periodic logging**: The plugin logs guideline counts by type every 5 steps
-
-### Lifecycle
-- **Periodic strategic refresh**: Re-fetches strategic rules from the server every N steps to pick up newly promoted rules without requiring a restart
-
 ## Design Decisions
+
+### Why self-evolving prompts (not fine-tuning)?
+
+- **Zero training cost**: No GPU, no dataset curation — guidelines are synthesized in-context by the same LLM
+- **Interpretable**: Every guideline is a human-readable sentence you can inspect, edit, or delete
+- **Reversible**: Bad guidelines are retired via feedback; fine-tuning is a one-way door
+- **Personalized at the prompt level**: Works with any base model — swap `gpt-4o` for `claude` and your guidelines carry over
 
 ### Why a sidecar server (not embedded)?
 
-- **Language bridge**: SCOPE is Python; OpenClaw plugins are TypeScript. A sidecar avoids complex Node↔Python IPC.
-- **Decoupled lifecycle**: The SCOPE server can be restarted, upgraded, or swapped independently of OpenClaw.
-- **Graceful degradation**: If the SCOPE server is down, the plugin silently no-ops — OpenClaw keeps working normally.
+- **Language bridge**: SCOPE is Python; OpenClaw plugins are TypeScript. A sidecar avoids complex Node↔Python IPC
+- **Decoupled lifecycle**: The SCOPE server can be restarted, upgraded, or swapped independently of OpenClaw
+- **Graceful degradation**: If the SCOPE server is down, the plugin silently no-ops — OpenClaw keeps working normally
 
 ### Why plugin hooks (not bootstrap files)?
 
-- **Dynamic**: `before_prompt_build` injects guidelines per-turn, not just at session start.
-- **System prompt space**: `appendSystemContext` places guidelines in cacheable system prompt space, reducing per-turn token cost.
-- **Clean lifecycle**: `llm_output` + `tool_use` + `tool_result` + `agent_end` capture the full step context for SCOPE analysis.
-- **Bootstrap files still work**: Strategic rules *could* additionally be written to `AGENTS.md` for persistence across restarts.
+- **Dynamic**: `before_prompt_build` injects guidelines per-turn, not just at session start
+- **System prompt space**: `appendSystemContext` places guidelines in cacheable system prompt space, reducing per-turn token cost
+- **Clean lifecycle**: `llm_output` + `tool_use` + `tool_result` + `agent_end` capture the full step context for SCOPE analysis
+- **Bootstrap files still work**: Strategic rules *could* additionally be written to `AGENTS.md` for persistence across restarts
 
 ### Guideline types
 
 | Type | Scope | Persistence | Injection | Priority |
 |------|-------|-------------|-----------|----------|
-| **Strategic** | Cross-task | Saved to disk | Loaded on startup + periodic refresh | Highest |
-| **Seed** | Baseline | Loaded from file | Always injected | Medium |
-| **Tactical** | Current task | In-memory only | Cleared on session switch | Lowest (most recent wins) |
+| **Strategic** | Cross-task | Saved to disk — your agent's evolved personality | Loaded on startup + periodic refresh | Highest |
+| **Seed** | Baseline | Loaded from file — your initial preferences | Always injected | Medium |
+| **Tactical** | Current task | In-memory only — ephemeral working memory | Cleared on session switch | Lowest (most recent wins) |
 
 ## API Endpoints
 
@@ -195,10 +210,10 @@ EvolveClaw implements a full **closed-loop self-improvement** cycle:
 |--------|------|-------------|
 | `GET` | `/health` | Health check |
 | `GET` | `/rules/{agent_name}` | Get strategic rules for an agent |
-| `GET` | `/stats/{agent_name}` | Get observability metrics |
+| `GET` | `/stats/{agent_name}` | Get observability metrics for self-improvement tracking |
 | `POST` | `/step` | Report a completed step for SCOPE analysis |
-| `POST` | `/reset` | Reset tactical state for a task/session |
-| `POST` | `/feedback` | Submit user feedback on a guideline |
+| `POST` | `/reset` | Reset tactical state on session/task switch |
+| `POST` | `/feedback` | Submit user feedback for closed-loop guideline management |
 
 ## Related Projects
 
