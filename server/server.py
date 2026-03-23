@@ -11,7 +11,6 @@ Endpoints:
     GET  /stats/{agent_name}    - Get observability stats for an agent
     POST /step                  - Report a completed step for analysis
     POST /reset                 - Reset tactical state for a task
-    POST /feedback              - Submit guideline feedback for closed-loop improvement
 """
 
 import logging
@@ -87,19 +86,8 @@ class AgentMetrics:
     def __init__(self):
         self.total_steps: int = 0
         self.guidelines_synthesized: int = 0
-        self.guidelines_retired: int = 0
-        self.recent_steps: list[float] = []
 
 agent_metrics: dict[str, AgentMetrics] = defaultdict(AgentMetrics)
-
-# ── Feedback tracking ──
-
-# guideline_id → {positive: int, negative: int}
-feedback_store: dict[str, dict[str, int]] = defaultdict(lambda: {"positive": 0, "negative": 0})
-# guideline_id → guideline_type
-guideline_type_store: dict[str, str] = {}
-# Retired guideline IDs
-retired_guidelines: set[str] = set()
 
 
 # ── Request / response models ──
@@ -134,26 +122,11 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "0.2.0"
 
-class FeedbackRequest(BaseModel):
-    agent_name: str
-    guideline_id: str
-    task_id: str | None = None
-    rating: str  # "positive" or "negative"
-    context: str | None = None
-
-class FeedbackResponse(BaseModel):
-    status: str = "ok"
-    action: str | None = None  # "retained", "retired", "demoted"
-
 class StatsResponse(BaseModel):
-    total_guidelines: int = 0
     strategic_count: int = 0
-    tactical_count: int = 0
     total_steps_analyzed: int = 0
     guidelines_synthesized: int = 0
-    guidelines_retired: int = 0
     recent_synthesis_rate: float = 0.0
-    domains: list[str] = []
     uptime_seconds: float = 0.0
 
 
@@ -215,7 +188,6 @@ async def on_step_complete(req: StepRequest):
     guideline_text, guideline_type = result
     guideline_id = f"{req.agent_name}_{metrics.guidelines_synthesized}_{int(time.time())}"
     metrics.guidelines_synthesized += 1
-    guideline_type_store[guideline_id] = guideline_type
 
     logger.info(
         "New %s guideline [%s] for %s: %s",
@@ -246,44 +218,6 @@ async def reset_tactical(req: ResetRequest):
     return {"status": "ok"}
 
 
-@app.post("/feedback", response_model=FeedbackResponse)
-async def submit_feedback(req: FeedbackRequest):
-    """
-    Submit user feedback for a specific guideline.
-    Enables closed-loop self-improvement: guidelines that consistently receive
-    negative feedback are retired; positive feedback reinforces retention.
-    """
-    if req.guideline_id in retired_guidelines:
-        return FeedbackResponse(status="ok", action="retired")
-
-    feedback_store[req.guideline_id][req.rating] += 1
-    counts = feedback_store[req.guideline_id]
-
-    logger.info(
-        "Feedback for guideline %s: %s (pos=%d, neg=%d)",
-        req.guideline_id, req.rating, counts["positive"], counts["negative"],
-    )
-
-    action = "retained"
-
-    if counts["negative"] >= cfg.FEEDBACK_NEGATIVE_RETIRE_THRESHOLD:
-        retired_guidelines.add(req.guideline_id)
-        agent_metrics[req.agent_name].guidelines_retired += 1
-        action = "retired"
-        logger.info("Guideline %s retired due to negative feedback", req.guideline_id)
-
-        # If the guideline was strategic, attempt to remove it from SCOPE's store.
-        gtype = guideline_type_store.get(req.guideline_id)
-        if gtype == "strategic" and hasattr(optimizer, "remove_strategic_rule"):
-            try:
-                optimizer.remove_strategic_rule(req.agent_name, req.guideline_id)
-            except Exception as exc:
-                logger.warning("Could not remove strategic rule: %s", exc)
-            action = "demoted"
-
-    return FeedbackResponse(status="ok", action=action)
-
-
 @app.get("/stats/{agent_name}", response_model=StatsResponse)
 async def get_stats(agent_name: str):
     """
@@ -295,27 +229,15 @@ async def get_stats(agent_name: str):
     rules_text = optimizer.get_strategic_rules_for_agent(agent_name)
     strategic_count = rules_text.strip().count("\n") + 1 if rules_text.strip() else 0
 
-    # Synthesis rate: guidelines per step in last 100 steps.
     rate = 0.0
     if metrics.total_steps > 0:
         rate = metrics.guidelines_synthesized / metrics.total_steps
 
-    domains: list[str] = []
-    if hasattr(optimizer, "get_domains"):
-        try:
-            domains = list(optimizer.get_domains(agent_name))
-        except Exception:
-            pass
-
     return StatsResponse(
-        total_guidelines=strategic_count + (metrics.guidelines_synthesized - metrics.guidelines_retired),
         strategic_count=strategic_count,
-        tactical_count=metrics.guidelines_synthesized - metrics.guidelines_retired - strategic_count,
         total_steps_analyzed=metrics.total_steps,
         guidelines_synthesized=metrics.guidelines_synthesized,
-        guidelines_retired=metrics.guidelines_retired,
         recent_synthesis_rate=round(rate, 4),
-        domains=domains,
         uptime_seconds=round(time.time() - start_time, 1),
     )
 

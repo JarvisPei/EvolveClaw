@@ -54,27 +54,10 @@ export type HealthResponse = {
   version: string;
 };
 
-export type FeedbackRequest = {
-  agent_name: string;
-  guideline_id: string;
-  task_id?: string;
-  rating: "positive" | "negative";
-  context?: string;
-};
-
-export type FeedbackResponse = {
-  status: "ok" | "error";
-  action?: "retained" | "retired" | "demoted";
-};
-
 export type StatsResponse = {
-  total_guidelines: number;
   strategic_count: number;
-  tactical_count: number;
   total_steps_analyzed: number;
   guidelines_synthesized: number;
-  guidelines_retired: number;
   recent_synthesis_rate: number;
-  domains: string[];
   uptime_seconds: number;
 };

@@ -56,23 +56,18 @@ Unlike static prompt engineering or manual rule files, EvolveClaw implements a *
 
 ### Adaptive Injection
 - **Auto mode** — Dynamically switches between `append_system` and `prepend_context` based on guideline volume
-  - *TODO: The 4000-char threshold is an untested heuristic. Needs empirical tuning.*
 
 ### Observability
 - **Periodic logging** — The plugin logs guideline distribution by type every 5 steps
-- **Stats endpoint** — `GET /stats/{agent_name}` returns server-side metrics
-  - *TODO: `domains` always returns `[]` (SCOPE has no `get_domains()` method). `tactical_count` is incorrectly calculated (monotonically grows instead of reflecting active count).*
+- **Stats endpoint** — `GET /stats/{agent_name}` returns strategic count, total steps, synthesis rate, and uptime
 
 ## TODOs and Known Limitations
 
-The following items are incomplete or not yet functional:
-
-- [ ] **`extractTaskSummary()`** — Currently parses the system prompt string, not the user's messages. Cannot actually extract user task intent. Needs rework to use conversation context from the `agent_end` event.
-- [ ] **`/feedback` endpoint** — Server-side only (no auto-call from plugin). Feedback state (`feedback_store`, `retired_guidelines`) is in-memory and lost on server restart. The `optimizer.remove_strategic_rule()` call will silently fail because SCOPE has no such method.
-- [ ] **`FEEDBACK_POSITIVE_PROMOTE_THRESHOLD`** — Configured in `config.py` but never used in any code path. Only negative threshold is checked.
-- [ ] **`/stats` endpoint** — `domains` always returns `[]` (`optimizer.get_domains()` does not exist in SCOPE). `tactical_count` = `synthesized - retired - strategic` grows monotonically and doesn't reflect actual active guidelines.
-- [ ] **`GuidelineEntry.injectionCount` / `createdAt`** — Tracked but never read by any logic. Could be used for analytics or eviction policy but currently dead data.
-- [ ] **Seed guidelines** — No example seed file is provided. Format is "one guideline per paragraph" but no documentation on what makes a good seed guideline.
+- [ ] **`extractTaskSummary()`** — Currently parses the system prompt string, not the user's messages. Needs rework to extract task intent from conversation context in the `agent_end` event.
+- [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). A future `/feedback` endpoint or CLI tool could be added once SCOPE supports `remove_strategic_rule()`.
+- [ ] **`GuidelineEntry.injectionCount` / `createdAt`** — Tracked but never read by any logic. Could be used for analytics or eviction policy.
+- [ ] **Seed guidelines** — No example seed file provided. Format is "one guideline per paragraph".
+- [ ] **Auto inject mode threshold** — The 4000-char threshold is an untested heuristic.
 
 ## Architecture
 
@@ -177,8 +172,6 @@ In `~/.openclaw/openclaw.json`:
 | `EVOLVECLAW_STRATEGIC_THRESHOLD` | `0.85` | Min confidence for strategic promotion |
 | `EVOLVECLAW_MAX_RULES_PER_TASK` | `20` | Max rules SCOPE keeps per task |
 | `EVOLVECLAW_MAX_STRATEGIC_PER_DOMAIN` | `10` | Max strategic rules per domain |
-| `EVOLVECLAW_FEEDBACK_NEGATIVE_RETIRE` | `3` | Retire guideline after N negative ratings (server-side, via `/feedback` API) |
-| `EVOLVECLAW_FEEDBACK_POSITIVE_PROMOTE` | `5` | *TODO: configured but not used in code* |
 
 ## Design Decisions
 
@@ -186,7 +179,7 @@ In `~/.openclaw/openclaw.json`:
 
 - **Zero training cost**: No GPU, no dataset curation — guidelines are synthesized in-context by the same LLM
 - **Interpretable**: Every guideline is a human-readable sentence you can inspect, edit, or delete
-- **Reversible**: Bad guidelines are retired via feedback; fine-tuning is a one-way door
+- **Reversible**: Guidelines are human-readable and can be inspected or deleted; fine-tuning is a one-way door
 - **Personalized at the prompt level**: Works with any base model — swap `gpt-4o` for `claude` and your guidelines carry over
 
 ### Why a sidecar server (not embedded)?
@@ -219,7 +212,6 @@ In `~/.openclaw/openclaw.json`:
 | `GET` | `/stats/{agent_name}` | Get observability metrics for self-improvement tracking |
 | `POST` | `/step` | Report a completed step for SCOPE analysis |
 | `POST` | `/reset` | Reset tactical state on session/task switch |
-| `POST` | `/feedback` | Submit feedback for guideline management (server-side API, not auto-called by plugin) |
 
 ## Related Projects
 
