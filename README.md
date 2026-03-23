@@ -254,7 +254,7 @@ evolveclaw/
 │   └── .env.template          # Environment variable template
 └── scripts/
     ├── start-server.sh        # Start the SCOPE sidecar
-    └── install-plugin.sh      # Symlink plugin into OpenClaw
+    └── install-plugin.sh      # Auto-configure OpenClaw to load the plugin
 ```
 
 </details>
@@ -262,6 +262,7 @@ evolveclaw/
 ## 📋 TODOs and Known Limitations
 
 - [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). Could be added once SCOPE supports guideline removal or OpenClaw adds a feedback hook.
+- [ ] **Migrate to focused SDK subpaths** — OpenClaw v2026.3.22 deprecated the monolithic `openclaw/plugin-sdk` import in favor of `openclaw/plugin-sdk/*` subpaths (e.g., `openclaw/plugin-sdk/plugin-entry`). Our plugin currently uses the monolithic import because external plugins loaded via `plugins.load.paths` cannot resolve OpenClaw's subpath exports. Once published to ClawHub/npm (where `openclaw` becomes a peer dependency), we should migrate to `definePluginEntry` and focused imports.
 
 <details>
 <summary><b>🎯 Design Decisions</b></summary>
@@ -321,6 +322,15 @@ New guidelines only appear on the **next** turn, after the background synthesis 
 | `POST` | `/reset` | Reset tactical state on session/task switch |
 
 </details>
+
+## 🔧 Compatibility
+
+| Component | Tested Version | Notes |
+|-----------|---------------|-------|
+| OpenClaw | v2026.3.22+ | Uses `openclaw/plugin-sdk` (monolithic, still supported) |
+| Python | 3.10+ | For the SCOPE sidecar server |
+| Node.js | 22+ | Required by OpenClaw |
+| SCOPE | 0.1.3+ | `custom_prompts` and `custom_domains` API required |
 
 ## 🔗 Related Projects
 
