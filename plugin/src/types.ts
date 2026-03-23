@@ -8,7 +8,6 @@ export type EvolveClawConfig = {
   enabled: boolean;
   injectMode: InjectMode;
   maxGuidelines: number;
-  seedGuidelinesPath: string;
   strategicRefreshInterval: number;
 };
 
@@ -16,7 +15,7 @@ export type EvolveClawConfig = {
 
 export type GuidelineEntry = {
   text: string;
-  type: "tactical" | "strategic" | "seed";
+  type: "tactical" | "strategic";
   createdAt: number;
   injectionCount: number;
   guidelineId?: string;

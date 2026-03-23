@@ -29,10 +29,6 @@
         "minimum": 5,
         "maximum": 200
       },
-      "seedGuidelinesPath": {
-        "type": "string",
-        "default": ""
-      },
       "strategicRefreshInterval": {
         "type": "number",
         "default": 10,
@@ -60,10 +56,6 @@
     "maxGuidelines": {
       "label": "Max Guidelines",
       "help": "Maximum number of guidelines to keep in memory. Oldest tactical guidelines are evicted first when the cap is reached."
-    },
-    "seedGuidelinesPath": {
-      "label": "Seed Guidelines File",
-      "help": "Path to a text file with initial guidelines (one per paragraph) for cold start. Leave empty to skip."
     },
     "strategicRefreshInterval": {
       "label": "Strategic Refresh Interval",

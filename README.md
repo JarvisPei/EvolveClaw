@@ -34,7 +34,7 @@ You ↔ OpenClaw ↔ LLM
 1. **Observe** — The plugin captures your full interaction trace: model output, tool calls, tool results, errors, and the semantic nature of your task
 2. **Learn** — SCOPE analyzes each trace and synthesizes a guideline if warranted — e.g., *"When this user asks for refactoring, prefer small atomic commits over large rewrites"*
 3. **Classify** — Each guideline is classified as **tactical** (task-specific, ephemeral) or **strategic** (cross-task, persisted to disk as part of your personal memory)
-4. **Inject** — On the next turn, all active guidelines are injected into the system prompt, structured by priority (strategic > seed > tactical)
+4. **Inject** — On the next turn, all active guidelines are injected into the system prompt, structured by priority (strategic > tactical)
 5. **Forget** — When you start a new session, tactical guidelines are cleared. The agent remembers *who you are* (strategic), not *what you were doing yesterday* (tactical)
 
 This creates a **virtuous cycle**: the more you use the agent, the better it understands your preferences, and the more personalized its behavior becomes.
@@ -51,7 +51,6 @@ Unlike static prompt engineering or manual rule files, EvolveClaw implements a *
 ### Adaptive Memory
 - **Strategic memory** — Cross-task guidelines that persist to disk. Loaded on startup, refreshed periodically
 - **Tactical memory** — Task-specific guidelines that live in-memory and auto-clear on session switch
-- **Seed guidelines** — Bootstrap with baseline behaviors from a file
 - **Guideline cap** — Enforces a maximum; evicts oldest tactical guidelines first
 
 ### Adaptive Injection
@@ -66,7 +65,6 @@ Unlike static prompt engineering or manual rule files, EvolveClaw implements a *
 - [ ] **`extractTaskSummary()`** — Currently parses the system prompt string, not the user's messages. Needs rework to extract task intent from conversation context in the `agent_end` event.
 - [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). A future `/feedback` endpoint or CLI tool could be added once SCOPE supports `remove_strategic_rule()`.
 - [ ] **`GuidelineEntry.injectionCount` / `createdAt`** — Tracked but never read by any logic. Could be used for analytics or eviction policy.
-- [ ] **Seed guidelines** — No example seed file provided. Format is "one guideline per paragraph".
 - [ ] **Auto inject mode threshold** — The 4000-char threshold is an untested heuristic.
 
 ## Architecture
@@ -135,7 +133,6 @@ In `~/.openclaw/openclaw.json`:
           "agentName": "openclaw-agent",
           "injectMode": "auto",
           "maxGuidelines": 30,
-          "seedGuidelinesPath": "",
           "strategicRefreshInterval": 10,
         }
       }
@@ -153,7 +150,6 @@ In `~/.openclaw/openclaw.json`:
 | `enabled` | `true` | Toggle on/off without uninstalling |
 | `injectMode` | `append_system` | `append_system` (cacheable), `prepend_context` (per-turn), `both`, or `auto` (switches dynamically based on guideline volume) |
 | `maxGuidelines` | `30` | Max guidelines in memory; oldest tactical evicted first when cap is reached |
-| `seedGuidelinesPath` | `""` | Path to a text file with initial guidelines for cold start |
 | `strategicRefreshInterval` | `10` | Re-fetch strategic rules from SCOPE server every N steps |
 
 ### Server Configuration (Environment Variables)
@@ -200,7 +196,6 @@ In `~/.openclaw/openclaw.json`:
 | Type | Scope | Persistence | Injection | Priority |
 |------|-------|-------------|-----------|----------|
 | **Strategic** | Cross-task | Saved to disk — your agent's evolved personality | Loaded on startup + periodic refresh | Highest |
-| **Seed** | Baseline | Loaded from file — your initial preferences | Always injected | Medium |
 | **Tactical** | Current task | In-memory only — ephemeral working memory | Cleared on session switch | Lowest (most recent wins) |
 
 ## API Endpoints

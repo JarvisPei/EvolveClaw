@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { ScopeClient } from "./scope-client.js";
 import type { EvolveClawConfig, GuidelineEntry, InjectMode } from "./types.js";
@@ -9,7 +8,6 @@ const DEFAULT_CONFIG: EvolveClawConfig = {
   enabled: true,
   injectMode: "append_system",
   maxGuidelines: 30,
-  seedGuidelinesPath: "",
   strategicRefreshInterval: 10,
 };
 
@@ -21,7 +19,6 @@ function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
     enabled: cfg.enabled ?? DEFAULT_CONFIG.enabled,
     injectMode: cfg.injectMode ?? DEFAULT_CONFIG.injectMode,
     maxGuidelines: cfg.maxGuidelines ?? DEFAULT_CONFIG.maxGuidelines,
-    seedGuidelinesPath: cfg.seedGuidelinesPath ?? DEFAULT_CONFIG.seedGuidelinesPath,
     strategicRefreshInterval: cfg.strategicRefreshInterval ?? DEFAULT_CONFIG.strategicRefreshInterval,
   };
 }
@@ -60,29 +57,6 @@ export default function register(api: OpenClawPluginApi) {
   let currentObservations: string[] = [];
   let currentError = "";
 
-  // ── Cold start: load seed guidelines from file ──
-  if (config.seedGuidelinesPath) {
-    try {
-      const seed = readFileSync(config.seedGuidelinesPath, "utf-8").trim();
-      if (seed) {
-        for (const line of seed.split(/\n{2,}/)) {
-          const text = line.trim();
-          if (text) {
-            guidelines.push({
-              text,
-              type: "seed",
-              createdAt: Date.now(),
-              injectionCount: 0,
-            });
-          }
-        }
-        api.logger.info(`evolveclaw: loaded ${guidelines.length} seed guideline(s) from ${config.seedGuidelinesPath}`);
-      }
-    } catch {
-      api.logger.warn(`evolveclaw: could not read seed guidelines from ${config.seedGuidelinesPath}`);
-    }
-  }
-
   // ── Cold start: load strategic rules from SCOPE server ──
   client.getStrategicRules(config.agentName).then((res) => {
     if (res?.rules) {
@@ -100,13 +74,11 @@ export default function register(api: OpenClawPluginApi) {
 
   function enforceGuidelineCap() {
     if (guidelines.length <= config.maxGuidelines) return;
-    // Keep strategic and seed, evict oldest tactical first.
     const tactical = guidelines.filter((g) => g.type === "tactical");
-    const keep = guidelines.filter((g) => g.type !== "tactical");
-    const budget = Math.max(0, config.maxGuidelines - keep.length);
-    // Keep most recent tactical entries.
+    const strategic = guidelines.filter((g) => g.type === "strategic");
+    const budget = Math.max(0, config.maxGuidelines - strategic.length);
     const retained = tactical.slice(-budget);
-    guidelines = [...keep, ...retained];
+    guidelines = [...strategic, ...retained];
     api.logger.info(`evolveclaw: guideline cap enforced, ${guidelines.length} remaining`);
   }
 
@@ -257,9 +229,8 @@ export default function register(api: OpenClawPluginApi) {
     if (stepCount % 5 === 0) {
       const strategic = guidelines.filter((g) => g.type === "strategic").length;
       const tactical = guidelines.filter((g) => g.type === "tactical").length;
-      const seed = guidelines.filter((g) => g.type === "seed").length;
       api.logger.info(
-        `evolveclaw: [stats] steps=${stepCount} guidelines=${guidelines.length} (strategic=${strategic} tactical=${tactical} seed=${seed}) synthesized=${guidelinesSynthesized}`,
+        `evolveclaw: [stats] steps=${stepCount} guidelines=${guidelines.length} (strategic=${strategic} tactical=${tactical}) synthesized=${guidelinesSynthesized}`,
       );
     }
 
@@ -289,14 +260,6 @@ function formatGuidelinesBlock(guidelines: GuidelineEntry[]): string {
   if (strategic.length > 0) {
     lines.push("### Strategic (cross-task, persistent)");
     for (const g of strategic) lines.push(g.text);
-    lines.push("");
-  }
-
-  // Seed guidelines.
-  const seed = guidelines.filter((g) => g.type === "seed");
-  if (seed.length > 0) {
-    lines.push("### Baseline");
-    for (const g of seed) lines.push(g.text);
     lines.push("");
   }
 
