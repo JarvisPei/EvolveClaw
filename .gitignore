@@ -1,0 +1,40 @@
+# Node / TypeScript
+node_modules/
+dist/
+*.js
+*.d.ts
+*.js.map
+!jest.config.js
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+venv/
+.venv/
+*.egg
+
+# SCOPE data
+scope_data/
+strategic_memory/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

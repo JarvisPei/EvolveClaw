@@ -1,0 +1,46 @@
+{
+  "id": "evolveclaw-scope",
+  "name": "EvolveClaw SCOPE",
+  "description": "Evolves the agent system prompt using SCOPE — synthesizes guidelines from execution traces to continuously improve agent performance.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "serverUrl": {
+        "type": "string",
+        "default": "http://127.0.0.1:5757"
+      },
+      "agentName": {
+        "type": "string",
+        "default": "openclaw-agent"
+      },
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "injectMode": {
+        "type": "string",
+        "enum": ["append_system", "prepend_context", "both"],
+        "default": "append_system"
+      }
+    }
+  },
+  "uiHints": {
+    "serverUrl": {
+      "label": "SCOPE Server URL",
+      "help": "URL of the SCOPE sidecar server (default: http://127.0.0.1:5757)."
+    },
+    "agentName": {
+      "label": "Agent Name",
+      "help": "Unique identifier for this agent in SCOPE's memory (default: openclaw-agent)."
+    },
+    "enabled": {
+      "label": "Enable Prompt Evolution",
+      "help": "Toggle SCOPE prompt evolution on/off without uninstalling."
+    },
+    "injectMode": {
+      "label": "Injection Mode",
+      "help": "Where to inject SCOPE guidelines: append_system (system prompt, cacheable), prepend_context (user prompt, per-turn), or both."
+    }
+  }
+}
