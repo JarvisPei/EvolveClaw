@@ -67,6 +67,20 @@ This creates a **virtuous cycle**: the more you use the agent, the better it und
 
 ## 🚀 Quick Start
 
+### 0. Prerequisites — Install OpenClaw
+
+EvolveClaw requires a running [OpenClaw](https://github.com/openclaw/openclaw) instance. If you don't have one yet:
+
+```bash
+# Requires Node ≥ 22
+npm install -g openclaw@latest
+
+# Run the onboarding wizard (sets up gateway, workspace, channels)
+openclaw onboard --install-daemon
+```
+
+For more details, see [OpenClaw Getting Started](https://docs.openclaw.ai/start/getting-started). You'll also need **Python ≥ 3.10** for the SCOPE sidecar server.
+
 ### 1. Start the SCOPE Server
 
 ```bash
