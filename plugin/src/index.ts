@@ -27,6 +27,23 @@ function isSubagentSession(sessionKey: string): boolean {
   return sessionKey.toLowerCase().includes("subagent:");
 }
 
+// ── Module-level shared state ──
+// OpenClaw may call register() multiple times (different registration modes).
+// State must live at module scope so all instances share the same guidelines.
+let guidelines: GuidelineEntry[] = [];
+let currentSystemPrompt = "";
+let currentModelOutput = "";
+let currentTrigger = "";
+let currentSessionId = "";
+let previousSessionId = "";
+let stepCount = 0;
+let guidelinesSynthesized = 0;
+let currentToolCalls: string[] = [];
+let currentObservations: string[] = [];
+let currentError = "";
+let skipCurrentSession = false;
+let strategicLoaded = false;
+
 /**
  * EvolveClaw SCOPE Plugin — Self-Improving Agent Prompt Evolution
  *
@@ -46,27 +63,16 @@ export default function register(api: OpenClawPluginApi) {
 
   const client = new ScopeClient(config.serverUrl);
 
-  // ── Per-run state ──
-  let guidelines: GuidelineEntry[] = [];
-  let currentSystemPrompt = "";
-  let currentModelOutput = "";
-  let currentTrigger = "";
-  let currentSessionId = "";
-  let previousSessionId = "";
-  let stepCount = 0;
-  let guidelinesSynthesized = 0;
-  let currentToolCalls: string[] = [];
-  let currentObservations: string[] = [];
-  let currentError = "";
-  let skipCurrentSession = false;
-
-  // ── Cold start: load strategic rules from SCOPE server ──
-  client.getStrategicRules(config.agentName).then((res) => {
-    if (res?.rules) {
-      guidelines.push({ text: res.rules, type: "strategic" });
-      api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s) from SCOPE server`);
-    }
-  });
+  // ── Cold start: load strategic rules (only once across all registrations) ──
+  if (!strategicLoaded) {
+    strategicLoaded = true;
+    client.getStrategicRules(config.agentName).then((res) => {
+      if (res?.rules) {
+        guidelines.push({ text: res.rules, type: "strategic" });
+        api.logger.info(`evolveclaw: loaded ${res.rule_count} strategic rule(s) from SCOPE server`);
+      }
+    });
+  }
 
   // ── Guideline management helpers ──
 
@@ -86,8 +92,6 @@ export default function register(api: OpenClawPluginApi) {
   ): string {
     const lastUserMsg = messages?.filter((m) => m.role === "user").pop();
     if (lastUserMsg?.content) {
-      // content may be a plain string or an array of content blocks
-      // (e.g. [{ type: "text", text: "..." }])
       let text: string;
       if (typeof lastUserMsg.content === "string") {
         text = lastUserMsg.content;
@@ -113,8 +117,6 @@ export default function register(api: OpenClawPluginApi) {
 
     if (SIDE_TRIGGERS.has(currentTrigger)) return {};
 
-    // Skip sub-agent sessions — they use minimal prompts for narrow
-    // internal tasks and would generate noisy, low-value guidelines.
     skipCurrentSession = isSubagentSession(currentSessionId);
     if (skipCurrentSession) {
       api.logger.debug(`evolveclaw: skipping sub-agent session ${currentSessionId}`);
@@ -187,7 +189,6 @@ export default function register(api: OpenClawPluginApi) {
     const messages = (event as { messages?: Array<{ role: string; content?: unknown }> }).messages;
     const taskDescription = extractTaskSummary(messages, currentSessionId);
 
-    // Assistant content is an array of blocks: [{ type: "text", text: "..." }]
     let fallbackOutput = "";
     if (!currentModelOutput) {
       const lastAssistant = messages?.filter((m) => m.role === "assistant").pop();
@@ -225,7 +226,6 @@ export default function register(api: OpenClawPluginApi) {
       );
     }
 
-    // Observability: periodic stats log.
     if (stepCount % 5 === 0) {
       const strategic = guidelines.filter((g) => g.type === "strategic").length;
       const tactical = guidelines.filter((g) => g.type === "tactical").length;
@@ -255,7 +255,6 @@ function formatGuidelinesBlock(guidelines: GuidelineEntry[]): string {
     "",
   ];
 
-  // Strategic guidelines first (highest priority).
   const strategic = guidelines.filter((g) => g.type === "strategic");
   if (strategic.length > 0) {
     lines.push("### Strategic (cross-task, persistent)");
@@ -263,7 +262,6 @@ function formatGuidelinesBlock(guidelines: GuidelineEntry[]): string {
     lines.push("");
   }
 
-  // Tactical guidelines (most recent last → highest recency priority).
   const tactical = guidelines.filter((g) => g.type === "tactical");
   if (tactical.length > 0) {
     lines.push("### Tactical (current task)");
