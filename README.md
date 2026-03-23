@@ -16,7 +16,7 @@
 
 ## 📰 News
 
-- **[2026/03]** 🔥 **Zero-config LLM setup** — SCOPE server now auto-detects OpenClaw's model configuration. No `.env` needed if OpenClaw already has an API key configured!
+- **[2026/03]** 🔥 **Fully automatic setup** — The plugin now auto-starts the SCOPE server and auto-detects OpenClaw's model configuration. No `.env`, no manual server launch needed!
 - **[2026/03]** 🔥 Added **custom SCOPE prompts & domains** tailored for personal AI assistants — user preference learning, code quality analysis, and communication style optimization!
 - **[2026/03]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE).
 
@@ -83,26 +83,11 @@ openclaw onboard --install-daemon
 
 For more details, see [OpenClaw Getting Started](https://docs.openclaw.ai/start/getting-started). You'll also need **Python ≥ 3.10** for the SCOPE sidecar server.
 
-### 1. Start the SCOPE Server
-
-> **Important:** The SCOPE server must be running **before** you start/restart the OpenClaw gateway. The plugin loads strategic rules from the server at startup — if the server is not reachable, previously learned guidelines won't be available until the next turn.
+### 1. Install Python Dependencies
 
 ```bash
 cd server
 pip install -r requirements.txt
-
-# If OpenClaw already has a model configured, just start:
-python server.py
-
-# Or, to use a specific LLM for SCOPE (overrides auto-detection):
-cp .env.template .env
-# Edit .env with your API key and preferences, then:
-python server.py
-```
-
-Or use the convenience script:
-```bash
-./scripts/start-server.sh
 ```
 
 ### 2. Install the Plugin
@@ -121,6 +106,10 @@ openclaw gateway restart
 ./scripts/install-plugin.sh
 openclaw gateway restart
 ```
+
+The plugin **auto-starts** the SCOPE server when it loads. It detects the `server/` directory relative to the plugin source, spawns `python3 server.py`, and waits for it to be ready. No manual server launch needed.
+
+> **Tip:** If you prefer to manage the server process yourself (e.g., for custom `.env` settings or running on a different host), start it manually before OpenClaw and set `"autoStartServer": false` in the plugin config. The plugin detects a running server via `/health` and skips spawning.
 
 <details>
 <summary><b>3. Configure (Optional)</b></summary>
@@ -158,6 +147,7 @@ In `~/.openclaw/openclaw.json`:
 | `scopeProvider` | *(auto from OpenClaw)* | Override the SCOPE provider: `anthropic`, `openai`, or `litellm` |
 | `scopeApiKey` | *(auto from OpenClaw)* | Override the API key SCOPE uses |
 | `scopeBaseUrl` | *(auto from OpenClaw)* | Override the base URL for SCOPE's LLM API |
+| `autoStartServer` | `true` | Auto-start the SCOPE server if not already running. Set to `false` if you manage the server yourself |
 
 > **LLM auto-detection:** By default, EvolveClaw reads OpenClaw's primary model configuration (`api.config.models.providers` + `api.config.agents.defaults.model.primary`) and forwards it to the SCOPE server at startup. No duplicate API key configuration needed. Set the `scope*` fields above only if you want SCOPE to use a different (e.g., cheaper) model than OpenClaw.
 

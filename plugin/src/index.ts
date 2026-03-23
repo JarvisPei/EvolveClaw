@@ -1,3 +1,8 @@
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { ScopeClient } from "./scope-client.js";
 import type { ConfigureRequest, EvolveClawConfig, GuidelineEntry, InjectMode } from "./types.js";
@@ -8,6 +13,7 @@ const DEFAULT_CONFIG: EvolveClawConfig = {
   enabled: true,
   injectMode: "append_system",
   maxGuidelines: 30,
+  autoStartServer: true,
 };
 
 function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
@@ -22,6 +28,7 @@ function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
     scopeProvider: cfg.scopeProvider,
     scopeApiKey: cfg.scopeApiKey,
     scopeBaseUrl: cfg.scopeBaseUrl,
+    autoStartServer: cfg.autoStartServer ?? DEFAULT_CONFIG.autoStartServer,
   };
 }
 
@@ -109,6 +116,62 @@ async function forwardOpenClawModelConfig(
   }
 }
 
+const SPAWN_POLL_INTERVAL_MS = 500;
+const SPAWN_TIMEOUT_MS = 15_000;
+
+async function ensureServerRunning(
+  client: ScopeClient,
+  logger: OpenClawPluginApi["logger"],
+): Promise<void> {
+  const health = await client.health();
+  if (health) {
+    logger.info("evolveclaw: SCOPE server already running");
+    return;
+  }
+
+  // Resolve server directory relative to this source file:
+  // plugin/src/index.ts -> ../../server/
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const serverDir = resolve(__dirname, "../../server");
+  const serverScript = resolve(serverDir, "server.py");
+
+  if (!existsSync(serverScript)) {
+    logger.info(
+      `evolveclaw: server.py not found at ${serverDir} — start the SCOPE server manually`,
+    );
+    return;
+  }
+
+  logger.info(`evolveclaw: auto-starting SCOPE server from ${serverDir}`);
+  try {
+    const child = spawn("python3", ["server.py"], {
+      cwd: serverDir,
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+  } catch (err) {
+    logger.info(`evolveclaw: failed to spawn python3 — is Python installed? (${err})`);
+    return;
+  }
+
+  // Poll /health until the server is ready
+  const deadline = Date.now() + SPAWN_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, SPAWN_POLL_INTERVAL_MS));
+    const h = await client.health();
+    if (h) {
+      logger.info("evolveclaw: SCOPE server started successfully");
+      return;
+    }
+  }
+
+  logger.info(
+    "evolveclaw: SCOPE server did not respond within timeout — continuing without SCOPE",
+  );
+}
+
 const SIDE_TRIGGERS = new Set(["heartbeat", "memory", "cron"]);
 
 function isSubagentSession(sessionKey: string): boolean {
@@ -135,6 +198,7 @@ interface EvolveClawState {
   skipCurrentSession: boolean;
   strategicLoaded: boolean;
   configForwarded: boolean;
+  serverSpawnAttempted: boolean;
 }
 
 const GLOBAL_KEY = "__evolveclaw_state__";
@@ -157,6 +221,7 @@ function getState(): EvolveClawState {
       skipCurrentSession: false,
       strategicLoaded: false,
       configForwarded: false,
+      serverSpawnAttempted: false,
     };
   }
   return g[GLOBAL_KEY] as EvolveClawState;
@@ -182,17 +247,10 @@ export default function register(api: OpenClawPluginApi) {
   const client = new ScopeClient(config.serverUrl);
   const s = getState();
 
-  // ── Forward OpenClaw's LLM config to the SCOPE server (once) ──
-  if (!s.configForwarded) {
-    s.configForwarded = true;
-    forwardOpenClawModelConfig(api, client, config).catch(() => {});
-  }
-
   // ── Load strategic rules (with retry on first hook if startup fetch failed) ──
   function loadStrategicRules() {
     return client.getStrategicRules(config.agentName).then((res) => {
       if (res?.rules) {
-        // Avoid duplicate entries on retry
         s.guidelines = s.guidelines.filter((g) => g.type !== "strategic");
         s.guidelines.unshift({ text: res.rules, type: "strategic" });
         s.strategicLoaded = true;
@@ -203,8 +261,23 @@ export default function register(api: OpenClawPluginApi) {
     });
   }
 
-  if (!s.strategicLoaded) {
-    loadStrategicRules();
+  // ── Startup sequence: spawn server (if needed) → forward config → load rules ──
+  if (!s.serverSpawnAttempted) {
+    s.serverSpawnAttempted = true;
+    (async () => {
+      if (config.autoStartServer) {
+        await ensureServerRunning(client, api.logger);
+      }
+      if (!s.configForwarded) {
+        s.configForwarded = true;
+        await forwardOpenClawModelConfig(api, client, config);
+      }
+      if (!s.strategicLoaded) {
+        await loadStrategicRules();
+      }
+    })().catch(() => {});
+  } else if (!s.strategicLoaded) {
+    loadStrategicRules().catch(() => {});
   }
 
   // ── Guideline management helpers ──

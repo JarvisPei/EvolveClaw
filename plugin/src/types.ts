@@ -12,6 +12,7 @@ export type EvolveClawConfig = {
   scopeProvider?: string;
   scopeApiKey?: string;
   scopeBaseUrl?: string;
+  autoStartServer: boolean;
 };
 
 // ── Guideline with metadata ──

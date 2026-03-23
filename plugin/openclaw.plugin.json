@@ -41,6 +41,10 @@
       },
       "scopeBaseUrl": {
         "type": "string"
+      },
+      "autoStartServer": {
+        "type": "boolean",
+        "default": true
       }
     }
   },
@@ -80,6 +84,10 @@
     "scopeBaseUrl": {
       "label": "SCOPE Base URL Override",
       "help": "Override the base URL for SCOPE's LLM API. Defaults to OpenClaw's configured provider base URL."
+    },
+    "autoStartServer": {
+      "label": "Auto-Start SCOPE Server",
+      "help": "Automatically start the SCOPE sidecar server if it is not already running. Disable if you manage the server process yourself."
     }
   }
 }
