@@ -98,13 +98,18 @@ async function forwardOpenClawModelConfig(
         apiKey = auth?.apiKey;
       }
     } catch {
-      api.logger.info(`evolveclaw: failed to resolve API key for provider '${providerName}'`);
-      return;
+      // API key resolution failed — the server may still have .env credentials
     }
   }
 
   if (!apiKey) {
-    api.logger.info(`evolveclaw: no API key resolved for '${providerName}', skipping auto-config`);
+    // Check if the server is already configured (e.g., via .env)
+    const health = await client.health();
+    if (health?.configured) {
+      api.logger.info("evolveclaw: server already configured (no auto-config needed)");
+    } else {
+      api.logger.info(`evolveclaw: no API key resolved for '${providerName}' and server is not configured`);
+    }
     return;
   }
 
@@ -113,7 +118,7 @@ async function forwardOpenClawModelConfig(
   if (res?.status === "ok") {
     api.logger.info(`evolveclaw: auto-configured SCOPE with OpenClaw's ${providerName}/${modelId} (provider=${provider})`);
   } else if (res?.status === "skipped") {
-    api.logger.info(`evolveclaw: server skipped auto-config (${res.reason})`);
+    api.logger.info(`evolveclaw: server already configured via .env`);
   }
 }
 
@@ -304,13 +309,7 @@ export default function register(api: OpenClawPluginApi) {
       }
       if (!s.configForwarded) {
         s.configForwarded = true;
-        // Skip config forwarding if the server already has LLM credentials
-        const health = await client.health();
-        if (health?.configured) {
-          api.logger.info("evolveclaw: server already configured via .env, skipping LLM config forwarding");
-        } else {
-          await forwardOpenClawModelConfig(api, client, config);
-        }
+        await forwardOpenClawModelConfig(api, client, config);
       }
       if (!s.strategicLoaded) {
         await loadStrategicRules();
