@@ -100,25 +100,18 @@ Or use the convenience script:
 
 ### 2. Install the Plugin
 
-**Option A — From ClawHub (recommended once published):**
+**Option A — From ClawHub / npm (recommended once published):**
 
 ```bash
 openclaw plugins install evolveclaw
+openclaw gateway restart
 ```
 
-**Option B — From local source (development):**
+**Option B — From local source:**
 
 ```bash
-# Link-install (no copy) so edits take effect immediately
-openclaw plugins install -l ./plugin
-
-# Or use the convenience script
+# Automatically configures OpenClaw to load the plugin
 ./scripts/install-plugin.sh
-```
-
-Then enable and restart:
-```bash
-openclaw plugins enable evolveclaw
 openclaw gateway restart
 ```
 
