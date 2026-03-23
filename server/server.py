@@ -106,6 +106,7 @@ class StepRequest(BaseModel):
     error: str | None = None
     current_system_prompt: str = ""
     task_id: str | None = None
+    conversation_history: str | None = None
 
 class StepResponse(BaseModel):
     guideline: str | None = None
@@ -170,12 +171,22 @@ async def on_step_complete(req: StepRequest):
 
     error_obj = Exception(req.error) if req.error else None
 
+    # Prepend conversation history to model_output so SCOPE sees
+    # multi-turn context when synthesizing guidelines.
+    effective_output = req.model_output or ""
+    if req.conversation_history:
+        effective_output = (
+            f"## Recent conversation history (previous turns):\n"
+            f"{req.conversation_history}\n\n"
+            f"## Current turn response:\n{effective_output}"
+        )
+
     try:
         result = await optimizer.on_step_complete(
             agent_name=req.agent_name,
             agent_role=req.agent_role,
             task=req.task,
-            model_output=req.model_output,
+            model_output=effective_output or None,
             tool_calls=req.tool_calls,
             observations=req.observations,
             error=error_obj,

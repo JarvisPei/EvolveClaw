@@ -123,24 +123,48 @@ export default function register(api: OpenClawPluginApi) {
     api.logger.info(`evolveclaw: guideline cap enforced, ${s.guidelines.length} remaining`);
   }
 
+  const MAX_HISTORY_TURNS = 5;
+
+  function extractMessageText(content: unknown): string {
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content
+        .filter((b: { type?: string }) => b.type === "text")
+        .map((b: { text?: string }) => b.text ?? "")
+        .join(" ");
+    }
+    return String(content ?? "");
+  }
+
+  function extractConversationHistory(
+    messages: Array<{ role: string; content?: unknown }> | undefined,
+  ): string | undefined {
+    if (!messages || messages.length <= 2) return undefined;
+
+    // Take the last N user/assistant pairs (excluding the final pair which
+    // is already captured in task + model_output)
+    const relevant = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(-(MAX_HISTORY_TURNS * 2 + 2), -2);
+
+    if (relevant.length === 0) return undefined;
+
+    const lines = relevant.map((m) => {
+      const text = extractMessageText(m.content).trim();
+      const truncated = text.length > 300 ? text.slice(0, 300) + "..." : text;
+      return `[${m.role}]: ${truncated}`;
+    });
+
+    return lines.join("\n");
+  }
+
   function extractTaskSummary(
     messages: Array<{ role: string; content?: unknown }> | undefined,
     sessionId: string,
   ): string {
     const lastUserMsg = messages?.filter((m) => m.role === "user").pop();
     if (lastUserMsg?.content) {
-      let text: string;
-      if (typeof lastUserMsg.content === "string") {
-        text = lastUserMsg.content;
-      } else if (Array.isArray(lastUserMsg.content)) {
-        text = lastUserMsg.content
-          .filter((b: { type?: string }) => b.type === "text")
-          .map((b: { text?: string }) => b.text ?? "")
-          .join(" ");
-      } else {
-        text = String(lastUserMsg.content);
-      }
-      text = text.trim();
+      const text = extractMessageText(lastUserMsg.content).trim();
       if (text) return text.length > 200 ? text.slice(0, 200) + "..." : text;
     }
     return `Session ${sessionId}: agent task`;
@@ -231,14 +255,10 @@ export default function register(api: OpenClawPluginApi) {
     let fallbackOutput = "";
     if (!s.currentModelOutput) {
       const lastAssistant = messages?.filter((m) => m.role === "assistant").pop();
-      const c = lastAssistant?.content;
-      if (typeof c === "string") fallbackOutput = c;
-      else if (Array.isArray(c))
-        fallbackOutput = c
-          .filter((b: { type?: string }) => b.type === "text")
-          .map((b: { text?: string }) => b.text ?? "")
-          .join("\n");
+      fallbackOutput = extractMessageText(lastAssistant?.content);
     }
+
+    const conversationHistory = extractConversationHistory(messages);
 
     const stepResult = await client.onStepComplete({
       agent_name: config.agentName,
@@ -250,6 +270,7 @@ export default function register(api: OpenClawPluginApi) {
       error: s.currentError || undefined,
       current_system_prompt: s.currentSystemPrompt,
       task_id: s.currentSessionId,
+      conversation_history: conversationHistory,
     });
 
     if (stepResult?.guideline && !stepResult.skipped) {

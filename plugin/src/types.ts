@@ -30,6 +30,7 @@ export type StepCompleteRequest = {
   error?: string;
   current_system_prompt: string;
   task_id?: string;
+  conversation_history?: string;
 };
 
 export type StepCompleteResponse = {

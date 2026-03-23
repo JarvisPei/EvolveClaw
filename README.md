@@ -161,7 +161,7 @@ In `~/.openclaw/openclaw.json`:
 | `EVOLVECLAW_SCOPE_DATA` | `./scope_data` | Directory for persistent strategic rules |
 | `EVOLVECLAW_SYNTHESIS_MODE` | `efficiency` | `efficiency` (fast) or `thoroughness` (comprehensive) |
 | `EVOLVECLAW_QUALITY_ANALYSIS` | `true` | Analyze successful steps too |
-| `EVOLVECLAW_QUALITY_FREQUENCY` | `3` | Analyze quality every N successful steps |
+| `EVOLVECLAW_QUALITY_FREQUENCY` | `3` | Analyze quality every N successful steps (recent conversation history is included for context) |
 | `EVOLVECLAW_ACCEPT_THRESHOLD` | `medium` | `all`, `low`, `medium`, `high` |
 | `EVOLVECLAW_STRATEGIC_THRESHOLD` | `0.85` | Min confidence for strategic promotion |
 | `EVOLVECLAW_MAX_RULES_PER_TASK` | `20` | Max rules SCOPE keeps per task |
