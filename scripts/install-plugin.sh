@@ -2,11 +2,31 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PLUGIN_DIR="$(cd "$SCRIPT_DIR/../plugin" && pwd)"
+PLUGIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "EvolveClaw Plugin Installer"
 echo "==========================="
 echo ""
+
+# ── ClawHub install mode ──
+if [[ "${1:-}" == "--clawhub" ]]; then
+    echo "Installing from ClawHub..."
+    openclaw plugins install clawhub:evolveclaw
+
+    INSTALL_DIR="$HOME/.openclaw/extensions/evolveclaw"
+    if [ -f "$INSTALL_DIR/server/requirements.txt" ]; then
+        echo ""
+        echo "Installing Python dependencies..."
+        pip install -r "$INSTALL_DIR/server/requirements.txt"
+    fi
+
+    echo ""
+    echo "Done! Restart the gateway to activate:"
+    echo "  openclaw gateway restart"
+    exit 0
+fi
+
+# ── Local source install mode ──
 
 # Locate OpenClaw config
 OPENCLAW_CONFIG="${OPENCLAW_CONFIG_PATH:-$HOME/.openclaw/openclaw.json}"
@@ -20,6 +40,13 @@ fi
 echo "Plugin source:  $PLUGIN_DIR"
 echo "OpenClaw config: $OPENCLAW_CONFIG"
 echo ""
+
+# Install Python dependencies
+if [ -f "$PLUGIN_DIR/server/requirements.txt" ]; then
+    echo "Installing Python dependencies..."
+    pip install -r "$PLUGIN_DIR/server/requirements.txt"
+    echo ""
+fi
 
 # Try native install first (copy mode)
 if openclaw plugins install "$PLUGIN_DIR" 2>/dev/null; then

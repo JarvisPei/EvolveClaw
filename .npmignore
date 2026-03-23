@@ -1,0 +1,22 @@
+# Secrets — never publish
+.env
+.env.local
+.env.bak
+
+# Runtime data
+scope_data/
+strategic_memory/
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Dev/repo artifacts
+.git/
+.gitignore
+asserts/
+*.log
+logs/
+.DS_Store
+.vscode/
+.idea/

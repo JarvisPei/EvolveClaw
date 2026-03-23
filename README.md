@@ -83,26 +83,22 @@ openclaw onboard --install-daemon
 
 For more details, see [OpenClaw Getting Started](https://docs.openclaw.ai/start/getting-started). You'll also need **Python ≥ 3.10** for the SCOPE sidecar server.
 
-### 1. Install Python Dependencies
+### 1. Install the Plugin
+
+**Option A — From ClawHub (recommended):**
 
 ```bash
-cd server
-pip install -r requirements.txt
-```
-
-### 2. Install the Plugin
-
-**Option A — From ClawHub / npm (recommended once published):**
-
-```bash
-openclaw plugins install evolveclaw
+openclaw plugins install clawhub:evolveclaw
+pip install -r ~/.openclaw/extensions/evolveclaw/server/requirements.txt
 openclaw gateway restart
 ```
 
 **Option B — From local source:**
 
 ```bash
-# Automatically configures OpenClaw to load the plugin
+git clone https://github.com/JarvisPei/EvolveClaw.git
+cd EvolveClaw
+pip install -r server/requirements.txt
 ./scripts/install-plugin.sh
 openclaw gateway restart
 ```
@@ -241,13 +237,13 @@ OpenClaw internally spawns sub-agents (file search, code lookup, etc.) that use 
 
 ```
 evolveclaw/
+├── package.json               # npm/ClawHub package manifest
+├── openclaw.plugin.json       # Plugin manifest with config schema
 ├── plugin/                    # OpenClaw TypeScript plugin
-│   ├── src/
-│   │   ├── index.ts           # Plugin entry: lifecycle hooks, guideline management
-│   │   ├── scope-client.ts    # HTTP client for SCOPE sidecar
-│   │   └── types.ts           # Shared type definitions (config, API, guideline metadata)
-│   ├── package.json
-│   └── openclaw.plugin.json   # Plugin manifest with config schema
+│   └── src/
+│       ├── index.ts           # Plugin entry: lifecycle hooks, guideline management
+│       ├── scope-client.ts    # HTTP client for SCOPE sidecar
+│       └── types.ts           # Shared type definitions (config, API, guideline metadata)
 ├── server/                    # SCOPE sidecar HTTP server (Python)
 │   ├── server.py              # FastAPI server: step analysis, tactical reset, stats
 │   ├── config.py              # Server configuration (env vars)
@@ -264,7 +260,7 @@ evolveclaw/
 ## 📋 TODOs and Known Limitations
 
 - [ ] **Feedback loop** — No auto-feedback from the plugin (OpenClaw has no `user_feedback` hook). Could be added once SCOPE supports guideline removal or OpenClaw adds a feedback hook.
-- [ ] **Migrate to focused SDK subpaths** — OpenClaw v2026.3.22 introduced `openclaw/plugin-sdk/*` subpaths (e.g., `openclaw/plugin-sdk/plugin-entry`) as the recommended import surface. Our plugin uses the monolithic `openclaw/plugin-sdk` because local-path plugins (`plugins.load.paths`) cannot resolve subpath exports without `npm install` in the plugin directory. This can be resolved by adding `openclaw` as a peer dependency and running `npm install`, or by publishing to ClawHub/npm.
+- [ ] **Migrate to focused SDK subpaths** — OpenClaw v2026.3.22 introduced `openclaw/plugin-sdk/*` subpaths (e.g., `openclaw/plugin-sdk/plugin-entry`) as the recommended import surface. Our plugin uses the monolithic `openclaw/plugin-sdk` which is still fully supported. Once installed via ClawHub, the focused subpaths can be adopted.
 
 <details>
 <summary><b>🎯 Design Decisions</b></summary>

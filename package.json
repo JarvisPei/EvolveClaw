@@ -6,8 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JarvisPei/EvolveClaw.git",
-    "directory": "evolveclaw/plugin"
+    "url": "https://github.com/JarvisPei/EvolveClaw.git"
   },
   "keywords": [
     "openclaw",
@@ -19,7 +18,24 @@
   ],
   "openclaw": {
     "extensions": [
-      "./src/index.ts"
+      "./plugin/src/index.ts"
     ]
+  },
+  "files": [
+    "plugin/",
+    "server/",
+    "!server/.env",
+    "!server/.env.local",
+    "!server/.env.bak",
+    "scripts/",
+    "openclaw.plugin.json"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.3.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
   }
 }
