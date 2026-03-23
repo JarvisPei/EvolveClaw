@@ -45,6 +45,9 @@
       "autoStartServer": {
         "type": "boolean",
         "default": true
+      },
+      "pythonPath": {
+        "type": "string"
       }
     }
   },
@@ -88,6 +91,10 @@
     "autoStartServer": {
       "label": "Auto-Start SCOPE Server",
       "help": "Automatically start the SCOPE sidecar server if it is not already running. Disable if you manage the server process yourself."
+    },
+    "pythonPath": {
+      "label": "Python Path",
+      "help": "Full path to the Python binary (e.g. /usr/bin/python3). Auto-detected if not set."
     }
   }
 }

@@ -148,6 +148,7 @@ In `~/.openclaw/openclaw.json`:
 | `scopeApiKey` | *(auto from OpenClaw)* | Override the API key SCOPE uses |
 | `scopeBaseUrl` | *(auto from OpenClaw)* | Override the base URL for SCOPE's LLM API |
 | `autoStartServer` | `true` | Auto-start the SCOPE server if not already running. Set to `false` if you manage the server yourself |
+| `pythonPath` | *(auto-detect)* | Full path to the Python binary (e.g., `/path/to/miniconda3/bin/python3`). Tries `server/venv/bin/python3`, `python3`, `python` by default |
 
 > **LLM auto-detection:** By default, EvolveClaw reads OpenClaw's primary model configuration (`api.config.models.providers` + `api.config.agents.defaults.model.primary`) and forwards it to the SCOPE server at startup. No duplicate API key configuration needed. Set the `scope*` fields above only if you want SCOPE to use a different (e.g., cheaper) model than OpenClaw.
 

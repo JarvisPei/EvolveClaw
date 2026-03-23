@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,6 +29,7 @@ function resolveConfig(api: OpenClawPluginApi): EvolveClawConfig {
     scopeApiKey: cfg.scopeApiKey,
     scopeBaseUrl: cfg.scopeBaseUrl,
     autoStartServer: cfg.autoStartServer ?? DEFAULT_CONFIG.autoStartServer,
+    pythonPath: cfg.pythonPath,
   };
 }
 
@@ -119,9 +120,39 @@ async function forwardOpenClawModelConfig(
 const SPAWN_POLL_INTERVAL_MS = 500;
 const SPAWN_TIMEOUT_MS = 15_000;
 
+function findPython(serverDir: string, explicit?: string): string | null {
+  if (explicit) {
+    try {
+      execFileSync(explicit, ["--version"], { stdio: "ignore" });
+      return explicit;
+    } catch {
+      return null;
+    }
+  }
+
+  // Try candidates: server-local venv first, then system python3/python
+  const candidates = [
+    resolve(serverDir, "venv/bin/python3"),
+    resolve(serverDir, "venv/bin/python"),
+    "python3",
+    "python",
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      execFileSync(candidate, ["--version"], { stdio: "ignore" });
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 async function ensureServerRunning(
   client: ScopeClient,
   logger: OpenClawPluginApi["logger"],
+  config: EvolveClawConfig,
 ): Promise<void> {
   const health = await client.health();
   if (health) {
@@ -129,8 +160,6 @@ async function ensureServerRunning(
     return;
   }
 
-  // Resolve server directory relative to this source file:
-  // plugin/src/index.ts -> ../../server/
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
   const serverDir = resolve(__dirname, "../../server");
@@ -143,20 +172,25 @@ async function ensureServerRunning(
     return;
   }
 
-  logger.info(`evolveclaw: auto-starting SCOPE server from ${serverDir}`);
+  const pythonBin = findPython(serverDir, config.pythonPath);
+  if (!pythonBin) {
+    logger.info("evolveclaw: python not found — install Python 3.10+ or set pythonPath in config");
+    return;
+  }
+
+  logger.info(`evolveclaw: auto-starting SCOPE server (python=${pythonBin}, dir=${serverDir})`);
   try {
-    const child = spawn("python3", ["server.py"], {
+    const child = spawn(pythonBin, ["server.py"], {
       cwd: serverDir,
       detached: true,
       stdio: "ignore",
     });
     child.unref();
   } catch (err) {
-    logger.info(`evolveclaw: failed to spawn python3 — is Python installed? (${err})`);
+    logger.info(`evolveclaw: failed to spawn ${pythonBin}: ${err}`);
     return;
   }
 
-  // Poll /health until the server is ready
   const deadline = Date.now() + SPAWN_TIMEOUT_MS;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, SPAWN_POLL_INTERVAL_MS));
@@ -266,11 +300,17 @@ export default function register(api: OpenClawPluginApi) {
     s.serverSpawnAttempted = true;
     (async () => {
       if (config.autoStartServer) {
-        await ensureServerRunning(client, api.logger);
+        await ensureServerRunning(client, api.logger, config);
       }
       if (!s.configForwarded) {
         s.configForwarded = true;
-        await forwardOpenClawModelConfig(api, client, config);
+        // Skip config forwarding if the server already has LLM credentials
+        const health = await client.health();
+        if (health?.configured) {
+          api.logger.info("evolveclaw: server already configured via .env, skipping LLM config forwarding");
+        } else {
+          await forwardOpenClawModelConfig(api, client, config);
+        }
       }
       if (!s.strategicLoaded) {
         await loadStrategicRules();

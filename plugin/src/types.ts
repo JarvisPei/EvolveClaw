@@ -13,6 +13,7 @@ export type EvolveClawConfig = {
   scopeApiKey?: string;
   scopeBaseUrl?: string;
   autoStartServer: boolean;
+  pythonPath?: string;
 };
 
 // ── Guideline with metadata ──
@@ -54,6 +55,7 @@ export type RulesResponse = {
 export type HealthResponse = {
   status: "ok" | "error";
   version: string;
+  configured?: boolean;
 };
 
 export type StatsResponse = {
