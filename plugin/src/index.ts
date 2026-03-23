@@ -131,10 +131,17 @@ export default function register(api: OpenClawPluginApi) {
     previousSessionId = currentSessionId;
 
     const activeGuidelines = guidelines.filter((g) => g.text);
-    if (activeGuidelines.length === 0) return {};
+    if (activeGuidelines.length === 0) {
+      api.logger.info("evolveclaw: before_prompt_build — no guidelines to inject");
+      return {};
+    }
 
     const block = formatGuidelinesBlock(activeGuidelines);
-    return buildInjectionResult(block, config.injectMode);
+    const injection = buildInjectionResult(block, config.injectMode);
+    api.logger.info(
+      `evolveclaw: before_prompt_build — injecting ${activeGuidelines.length} guideline(s) via ${config.injectMode} (${block.length} chars)`,
+    );
+    return injection;
   });
 
   // ── Hook: llm_output ──
