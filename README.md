@@ -103,7 +103,10 @@ pip install -r server/requirements.txt
 openclaw gateway restart
 ```
 
-**Option B — From local source (Windows PowerShell):**
+<details>
+<summary><b>Option B — From local source (Windows PowerShell)</b></summary>
+
+> OpenClaw itself requires WSL2 on Windows. If you're using WSL2, use the bash script above. The PowerShell method is provided for setups where OpenClaw runs natively.
 
 ```powershell
 git clone https://github.com/JarvisPei/EvolveClaw.git
@@ -124,7 +127,7 @@ $cfg | ConvertTo-Json -Depth 10 | Set-Content $config
 openclaw gateway restart
 ```
 
-> **Windows note:** OpenClaw itself requires WSL2 on Windows. If you're using WSL2, use the bash script above. The PowerShell method is provided for setups where OpenClaw runs natively.
+</details>
 
 The plugin **auto-starts** the SCOPE server when it loads. It detects the `server/` directory relative to the plugin source, spawns `python3 server.py`, and waits for it to be ready. No manual server launch needed.
 
