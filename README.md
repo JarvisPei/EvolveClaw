@@ -12,6 +12,13 @@
   <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License: MIT">
 </p>
 
+<p align="center">
+  <a href="asserts/case1-openclaw.mp4">▶️ Demo 1: Code Preference</a> ·
+  <a href="asserts/case2-openclaw.mp4">▶️ Demo 2: Workflow Convention</a>
+  <br>
+  <sub>Demo 1: Agent learns to always use TypeScript instead of JavaScript · Demo 2: Agent learns to always write tests alongside new code</sub>
+</p>
+
 ---
 
 ## 📰 News
