@@ -16,6 +16,7 @@
 
 ## 📰 News
 
+- **[2026/03]** 🔥 **Published to [ClawHub](https://clawhub.ai/plugins/evolveclaw)** — Install with `openclaw plugins install clawhub:evolveclaw`. Python deps auto-install on first launch!
 - **[2026/03]** 🔥 **Fully automatic setup** — The plugin now auto-starts the SCOPE server and auto-detects OpenClaw's model configuration. No `.env`, no manual server launch needed!
 - **[2026/03]** 🔥 Added **custom SCOPE prompts & domains** tailored for personal AI assistants — user preference learning, code quality analysis, and communication style optimization!
 - **[2026/03]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE).
@@ -89,9 +90,10 @@ For more details, see [OpenClaw Getting Started](https://docs.openclaw.ai/start/
 
 ```bash
 openclaw plugins install clawhub:evolveclaw
-pip install -r ~/.openclaw/extensions/evolveclaw/server/requirements.txt
 openclaw gateway restart
 ```
+
+> Python dependencies (`scope-optimizer`, `fastapi`, etc.) are **auto-installed** on first launch if missing. No manual `pip install` needed.
 
 **Option B — From local source (Linux / macOS / WSL2):**
 

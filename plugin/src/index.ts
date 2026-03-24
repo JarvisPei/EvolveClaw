@@ -191,6 +191,33 @@ async function ensureServerRunning(
     return;
   }
 
+  // Auto-install Python deps if missing
+  try {
+    execFileSync(pythonBin, ["-c", "import scope; import fastapi"], {
+      cwd: serverDir,
+      stdio: "ignore",
+      timeout: 10_000,
+    });
+  } catch {
+    const reqFile = resolve(serverDir, "requirements.txt");
+    if (existsSync(reqFile)) {
+      logger.info("evolveclaw: installing Python dependencies...");
+      try {
+        execFileSync(pythonBin, ["-m", "pip", "install", "-r", reqFile], {
+          cwd: serverDir,
+          stdio: "ignore",
+          timeout: 120_000,
+        });
+        logger.info("evolveclaw: Python dependencies installed");
+      } catch (pipErr) {
+        logger.info(
+          `evolveclaw: pip install failed — run manually: pip install -r ${reqFile}`,
+        );
+        return;
+      }
+    }
+  }
+
   logger.info(`evolveclaw: auto-starting SCOPE server (python=${pythonBin}, dir=${serverDir})`);
   try {
     const child = spawn(pythonBin, ["server.py"], {
