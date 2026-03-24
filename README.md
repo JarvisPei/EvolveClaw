@@ -93,7 +93,7 @@ pip install -r ~/.openclaw/extensions/evolveclaw/server/requirements.txt
 openclaw gateway restart
 ```
 
-**Option B — From local source:**
+**Option B — From local source (Linux / macOS / WSL2):**
 
 ```bash
 git clone https://github.com/JarvisPei/EvolveClaw.git
@@ -102,6 +102,29 @@ pip install -r server/requirements.txt
 ./scripts/install-plugin.sh
 openclaw gateway restart
 ```
+
+**Option B — From local source (Windows PowerShell):**
+
+```powershell
+git clone https://github.com/JarvisPei/EvolveClaw.git
+cd EvolveClaw
+pip install -r server/requirements.txt
+
+# Add plugin path to OpenClaw config
+$config = "$env:USERPROFILE\.openclaw\openclaw.json"
+$cfg = Get-Content $config | ConvertFrom-Json
+if (-not $cfg.plugins) { $cfg | Add-Member -NotePropertyName plugins -NotePropertyValue @{} }
+if (-not $cfg.plugins.load) { $cfg.plugins | Add-Member -NotePropertyName load -NotePropertyValue @{} }
+if (-not $cfg.plugins.load.paths) { $cfg.plugins.load | Add-Member -NotePropertyName paths -NotePropertyValue @() }
+$cfg.plugins.load.paths += (Resolve-Path .).Path
+if (-not $cfg.plugins.entries) { $cfg.plugins | Add-Member -NotePropertyName entries -NotePropertyValue @{} }
+$cfg.plugins.entries | Add-Member -NotePropertyName evolveclaw -NotePropertyValue @{enabled=$true} -Force
+$cfg | ConvertTo-Json -Depth 10 | Set-Content $config
+
+openclaw gateway restart
+```
+
+> **Windows note:** OpenClaw itself requires WSL2 on Windows. If you're using WSL2, use the bash script above. The PowerShell method is provided for setups where OpenClaw runs natively.
 
 The plugin **auto-starts** the SCOPE server when it loads. It detects the `server/` directory relative to the plugin source, spawns `python3 server.py`, and waits for it to be ready. No manual server launch needed.
 
