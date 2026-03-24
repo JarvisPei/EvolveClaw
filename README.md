@@ -12,11 +12,14 @@
   <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License: MIT">
 </p>
 
+<h4 align="center">Demo 1: Code Preference — Agent learns to always use TypeScript</h4>
 <p align="center">
-  <a href="asserts/case1-openclaw.mp4">▶️ Demo 1: Code Preference</a> ·
-  <a href="asserts/case2-openclaw.mp4">▶️ Demo 2: Workflow Convention</a>
-  <br>
-  <sub>Demo 1: Agent learns to always use TypeScript instead of JavaScript · Demo 2: Agent learns to always write tests alongside new code</sub>
+  <video src="https://github.com/user-attachments/assets/fccc12df-a231-4d98-bc32-a3e7124560c4" controls width="700"></video>
+</p>
+
+<h4 align="center">Demo 2: Workflow Convention — Agent learns to always write tests</h4>
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/f9fefc49-eae1-4c06-8821-99cc981fb457" controls width="700"></video>
 </p>
 
 ---
