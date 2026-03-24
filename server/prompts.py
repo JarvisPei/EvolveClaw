@@ -1,10 +1,10 @@
 """
 EvolveClaw prompt templates for SCOPE integration.
 
-These prompts are tailored for a personal AI coding assistant (OpenClaw),
-focusing on user interaction quality, coding best practices, and tool usage
-patterns — as opposed to SCOPE's default prompts which target task-specific
-problem-solving (e.g., HLE benchmarks).
+These prompts are tailored for a personal AI assistant (OpenClaw),
+focusing on user interaction quality, task execution best practices, and tool
+usage patterns — as opposed to SCOPE's default prompts which target
+task-specific problem-solving (e.g., HLE benchmarks).
 
 All templates use the same format placeholders as SCOPE's built-in prompts
 so they can be passed directly via ``custom_prompts``.
@@ -14,7 +14,7 @@ so they can be passed directly via ``custom_prompts``.
 # GUIDELINE SYNTHESIS PROMPTS
 # =============================================================================
 
-ERROR_REFLECTION_PROMPT = """You are analyzing an AI coding assistant's execution error to improve its system prompt.
+ERROR_REFLECTION_PROMPT = """You are analyzing an AI assistant's execution error to improve its system prompt.
 
 Your task: Generate a SHORT, TARGETED system prompt addition (1-3 lines) that will help prevent this type of error in future interactions.
 
@@ -34,11 +34,11 @@ Current system prompt (for reference, to avoid duplication):
 Already applied rules (DO NOT duplicate these):
 {applied_rules}
 
-Focus areas for a coding assistant:
+Focus areas:
 1. Did the assistant misuse a tool (wrong arguments, missing validation)?
-2. Did it make incorrect assumptions about the user's environment or codebase?
-3. Did it fail to handle edge cases in file operations, shell commands, or code generation?
-4. Did it break the user's workflow by modifying wrong files or running destructive commands?
+2. Did it make incorrect assumptions about the user's environment or context?
+3. Did it fail to handle edge cases in tool usage, file operations, or task execution?
+4. Did it break the user's workflow by taking destructive or incorrect actions?
 
 Guidelines:
 - Be SPECIFIC and ACTIONABLE — target the exact error cause
@@ -55,7 +55,7 @@ Output ONLY valid JSON with this exact format:
 }}"""
 
 
-QUALITY_REFLECTION_PROMPT_EFFICIENCY = """You are analyzing an AI coding assistant's response quality.
+QUALITY_REFLECTION_PROMPT_EFFICIENCY = """You are analyzing an AI assistant's response quality.
 
 Your task: Identify actionable improvements in how the assistant interacted with the user. If found, generate a SHORT, TARGETED system prompt addition (1-3 lines).
 
@@ -76,7 +76,7 @@ Already applied rules (DO NOT duplicate these):
 Analyze for:
 1. **Response relevance**: Did it address the user's actual intent, or over/under-interpret?
 2. **Tool efficiency**: Unnecessary tool calls, redundant file reads, or missing tool usage?
-3. **Code quality**: Generated code with bugs, missing imports, poor patterns?
+3. **Output quality**: Generated content with errors, missing context, or poor patterns?
 4. **Communication**: Was the response clear, appropriately concise, and well-structured?
 5. **User preferences**: Did the user express or imply a preference (coding style, framework, verbosity) that should be remembered for future sessions?
 
@@ -95,7 +95,7 @@ Output ONLY valid JSON with this exact format:
 }}"""
 
 
-QUALITY_REFLECTION_PROMPT_THOROUGHNESS = """You are analyzing an AI coding assistant's response quality in depth.
+QUALITY_REFLECTION_PROMPT_THOROUGHNESS = """You are analyzing an AI assistant's response quality in depth.
 
 Your task: Identify actionable improvements in how the assistant handled this interaction. If found, generate a SHORT, TARGETED system prompt addition (1-3 lines).
 
@@ -121,11 +121,11 @@ Analyze for improvements across these dimensions:
    - Did it over-engineer or under-deliver relative to the request scope?
    Examples: "Ask for clarification when multiple interpretations exist", "Match response depth to request complexity"
 
-2. **Code Generation & Editing Quality**:
-   - Is generated code correct, idiomatic, and following project conventions?
-   - Are edge cases handled? Are imports included?
-   - Does the code match the language/framework version in use?
-   Examples: "Include error handling for file I/O", "Match existing code style", "Verify imports before using"
+2. **Output & Execution Quality**:
+   - Is generated content (code, text, analysis) correct and following conventions?
+   - Are edge cases handled? Are assumptions validated?
+   - Does the output match the user's context and expectations?
+   Examples: "Include error handling for file I/O", "Match existing style", "Verify assumptions before acting"
 
 3. **Tool Usage Patterns**:
    - Are tools used efficiently (batch reads, targeted searches)?
@@ -179,15 +179,15 @@ Output ONLY valid JSON with this exact format:
 
 
 # =============================================================================
-# CLASSIFICATION PROMPT (override for coding-assistant domains)
+# CLASSIFICATION PROMPT (override for personal-assistant domains)
 # =============================================================================
 
-CLASSIFICATION_PROMPT = """You are a rule classifier for an AI coding assistant. Analyze the proposed update and determine:
+CLASSIFICATION_PROMPT = """You are a rule classifier for an AI assistant. Analyze the proposed update and determine:
 
 1. **Is it a DUPLICATE/REDUNDANT?** Check if it's already covered by existing strategic or tactical rules.
 2. **What is its SCOPE?**
-   - STRATEGIC: General best practice OR consistent user preference applicable across sessions (e.g., "Always read a file before editing it", "User prefers concise responses without step-by-step narration", "Default to TypeScript when the user doesn't specify a language")
-   - TACTICAL: Session-specific observation for current interaction only (e.g., "This project uses Poetry instead of pip", "Current task requires Python 3.9 compatibility")
+   - STRATEGIC: General best practice OR consistent user preference applicable across sessions (e.g., "Always read a file before editing it", "User prefers concise responses without step-by-step narration", "Default to detailed explanations for complex topics")
+   - TACTICAL: Session-specific observation for current interaction only (e.g., "This project uses Poetry instead of pip", "Current task requires a formal tone")
    NOTE: User preferences that reflect consistent habits (not one-off requests) should be STRATEGIC with domain "user_preferences".
 3. **Refined CONFIDENCE**: Assess confidence (0.0-1.0) based on how actionable and broadly useful this rule is.
 4. **DOMAIN**: If strategic, you MUST categorize it into ONE of the following allowed domains: {allowed_domains}
@@ -223,13 +223,13 @@ JSON Response:"""
 # =============================================================================
 
 EVOLVECLAW_DOMAINS = [
-    "tool_usage",           # How to use IDE/shell tools correctly (file ops, search, terminal)
-    "code_quality",         # Code generation patterns, style, correctness, testing
+    "tool_usage",           # How to use tools correctly (file ops, search, terminal, browser)
+    "code_quality",         # Code/content generation patterns, style, correctness
     "error_handling",       # Recovering from errors, safe operations, rollback strategies
     "communication",        # Response style, conciseness, explanation depth, user interaction
-    "user_preferences",     # Learned user habits: coding style, frameworks, conventions, workflow preferences
-    "context_awareness",    # Leveraging project structure, conversation history, codebase knowledge
-    "workflow",             # Multi-step task planning, edit-test cycles, safe deployment
+    "user_preferences",     # Learned user habits: style, frameworks, conventions, workflow preferences
+    "context_awareness",    # Leveraging project structure, conversation history, domain knowledge
+    "workflow",             # Multi-step task planning, edit-test cycles, process management
     "general",              # Catch-all for high-quality, uncategorized rules
 ]
 

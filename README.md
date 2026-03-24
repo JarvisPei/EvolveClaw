@@ -26,7 +26,7 @@ EvolveClaw turns [OpenClaw](https://github.com/openclaw/openclaw) into a **self-
 
 No two EvolveClaw instances are the same. Over time, each one develops a unique personality shaped by its owner's habits.
 
-**Key adaptation**: SCOPE was originally designed for task-specific benchmarks (e.g., HLE). EvolveClaw extends it with **custom prompt templates and domain categories** tailored for a personal AI coding assistant — focusing on user preference learning, code quality, communication style, and workflow patterns instead of domain-specific problem-solving heuristics.
+**Key adaptation**: SCOPE was originally designed for task-specific benchmarks (e.g., HLE). EvolveClaw extends it with **custom prompt templates and domain categories** tailored for a personal AI assistant — focusing on user preference learning, task quality, communication style, and workflow patterns instead of domain-specific problem-solving heuristics.
 
 ## 📝 Contents
 
@@ -43,7 +43,7 @@ No two EvolveClaw instances are the same. Over time, each one develops a unique 
 
 ## 💡 Why EvolveClaw?
 
-Today's AI coding agents ship with a static system prompt — every user gets the same instructions. But users are different: some prefer terse answers, others want detailed explanations; some rely heavily on search tools, others write code directly; some work on frontends, others on distributed systems.
+Today's AI agents ship with a static system prompt — every user gets the same instructions. But users are different: some prefer terse answers, others want detailed explanations; some rely heavily on search tools, others write code directly; some use the agent for coding, others for research or writing.
 
 EvolveClaw closes this gap with three core ideas:
 
@@ -220,7 +220,7 @@ SCOPE's built-in prompts are designed for task-specific benchmarks. EvolveClaw o
 | Domain | What It Captures |
 |--------|-----------------|
 | `tool_usage` | IDE/shell tool patterns — file ops, search, terminal commands |
-| `code_quality` | Code generation patterns, style, correctness, testing |
+| `code_quality` | Task execution patterns, code style, correctness, output quality |
 | `error_handling` | Safe operations, rollback strategies, error recovery |
 | `communication` | Response style, conciseness, explanation depth |
 | `user_preferences` | Learned user habits — coding style, frameworks, conventions |
