@@ -128,6 +128,21 @@ openclaw gateway restart
 
 The plugin handles everything automatically on first gateway startup: it **auto-installs** Python dependencies (`scope-optimizer`, `fastapi`, etc.) if missing, then **auto-starts** the SCOPE server. No manual `pip install` or server launch needed.
 
+### 2. Verify It Works
+
+After restarting the gateway, check the logs for these lines:
+
+```
+[plugins] evolveclaw: activated (server=http://127.0.0.1:5757, agent=openclaw-agent, inject=append_system, maxGuidelines=30)
+[gateway] evolveclaw: installing Python dependencies...        # first launch only
+[gateway] evolveclaw: Python dependencies installed            # first launch only
+[gateway] evolveclaw: SCOPE server started successfully
+[gateway] evolveclaw: auto-configured SCOPE with OpenClaw's <your-model>
+[gateway] evolveclaw: loaded N strategic rule(s), guidelines.length: 1
+```
+
+If you see `activated` and `SCOPE server started successfully`, EvolveClaw is running. Start chatting — the agent will begin learning from your interactions after every few exchanges.
+
 > **Tip:** If you prefer to manage the server process yourself (e.g., for custom `.env` settings or running on a different host), start it manually before OpenClaw and set `"autoStartServer": false` in the plugin config. The plugin detects a running server via `/health` and skips spawning.
 
 <details>
