@@ -16,8 +16,7 @@
 
 ## 📰 News
 
-- **[2026/03]** 🔥 **Published to [ClawHub](https://clawhub.ai/plugins/evolveclaw)** — Install with `openclaw plugins install clawhub:evolveclaw`. Python deps auto-install on first launch!
-- **[2026/03]** 🔥 **Fully automatic setup** — The plugin now auto-starts the SCOPE server and auto-detects OpenClaw's model configuration. No `.env`, no manual server launch needed!
+- **[2026/03]** 🔥 **Fully automatic setup** — The plugin auto-starts the SCOPE server, auto-detects OpenClaw's model configuration, and auto-installs Python dependencies on first launch. No `.env`, no manual setup needed!
 - **[2026/03]** 🔥 Added **custom SCOPE prompts & domains** tailored for personal AI assistants — user preference learning, code quality analysis, and communication style optimization!
 - **[2026/03]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE).
 
@@ -93,14 +92,11 @@ openclaw plugins install clawhub:evolveclaw
 openclaw gateway restart
 ```
 
-> Python dependencies (`scope-optimizer`, `fastapi`, etc.) are **auto-installed** on first launch if missing. No manual `pip install` needed.
-
 **Option B — From local source (Linux / macOS / WSL2):**
 
 ```bash
 git clone https://github.com/JarvisPei/EvolveClaw.git
 cd EvolveClaw
-pip install -r server/requirements.txt
 ./scripts/install-plugin.sh
 openclaw gateway restart
 ```
@@ -113,7 +109,6 @@ openclaw gateway restart
 ```powershell
 git clone https://github.com/JarvisPei/EvolveClaw.git
 cd EvolveClaw
-pip install -r server/requirements.txt
 
 # Add plugin path to OpenClaw config
 $config = "$env:USERPROFILE\.openclaw\openclaw.json"
@@ -131,7 +126,7 @@ openclaw gateway restart
 
 </details>
 
-The plugin **auto-starts** the SCOPE server when it loads. It detects the `server/` directory relative to the plugin source, spawns `python3 server.py`, and waits for it to be ready. No manual server launch needed.
+The plugin handles everything automatically on first gateway startup: it **auto-installs** Python dependencies (`scope-optimizer`, `fastapi`, etc.) if missing, then **auto-starts** the SCOPE server. No manual `pip install` or server launch needed.
 
 > **Tip:** If you prefer to manage the server process yourself (e.g., for custom `.env` settings or running on a different host), start it manually before OpenClaw and set `"autoStartServer": false` in the plugin config. The plugin detects a running server via `/health` and skips spawning.
 
