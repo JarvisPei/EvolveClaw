@@ -12,15 +12,16 @@
   <img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License: MIT">
 </p>
 
-<h4 align="center">Demo 1: Code Preference — Agent learns to always use TypeScript</h4>
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/fccc12df-a231-4d98-bc32-a3e7124560c4" controls width="700"></video>
-</p>
-
-<h4 align="center">Demo 2: Workflow Convention — Agent learns to always write tests</h4>
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/f9fefc49-eae1-4c06-8821-99cc981fb457" controls width="700"></video>
-</p>
+<table align="center">
+<tr>
+<td align="center"><b>Demo 1: Code Preference</b><br><sub>Agent learns to always use TypeScript</sub></td>
+<td align="center"><b>Demo 2: Workflow Convention</b><br><sub>Agent learns to always write tests</sub></td>
+</tr>
+<tr>
+<td><video src="https://github.com/user-attachments/assets/fccc12df-a231-4d98-bc32-a3e7124560c4" controls width="400"></video></td>
+<td><video src="https://github.com/user-attachments/assets/f9fefc49-eae1-4c06-8821-99cc981fb457" controls width="400"></video></td>
+</tr>
+</table>
 
 ---
 
