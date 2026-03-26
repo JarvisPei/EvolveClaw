@@ -29,7 +29,7 @@
 
 - **[2026/03/24]** 🔥 **Fully automatic setup** — The plugin auto-starts the SCOPE server, auto-detects OpenClaw's model configuration, and auto-installs Python dependencies on first launch. No `.env`, no manual setup needed!
 - **[2026/03/24]** 🔥 Added **custom SCOPE prompts & domains** tailored for personal AI assistants — user preference learning, code quality analysis, and communication style optimization!
-- **[2026/03/23]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE). We also support agent workflows like [EvoFabric](https://github.com/huawei-noah/noah-research/tree/master/EvoFabric) with SCOPE, start equipping your agent with SCOPE now!
+- **[2026/03/23]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE).
 
 ---
 
@@ -38,6 +38,8 @@ EvolveClaw turns [OpenClaw](https://github.com/openclaw/openclaw) into a **self-
 No two EvolveClaw instances are the same. Over time, each one develops a unique personality shaped by its owner's habits.
 
 **Key adaptation**: SCOPE was originally designed for task-specific benchmarks (e.g., HLE). EvolveClaw extends it with **custom prompt templates and domain categories** tailored for a personal AI assistant — focusing on user preference learning, task quality, communication style, and workflow patterns instead of domain-specific problem-solving heuristics.
+
+> SCOPE also support agent workflows like [EvoFabric](https://github.com/huawei-noah/noah-research/tree/master/EvoFabric)
 
 ## 📝 Contents
 
