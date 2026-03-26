@@ -29,7 +29,7 @@
 
 - **[2026/03]** 🔥 **Fully automatic setup** — The plugin auto-starts the SCOPE server, auto-detects OpenClaw's model configuration, and auto-installs Python dependencies on first launch. No `.env`, no manual setup needed!
 - **[2026/03]** 🔥 Added **custom SCOPE prompts & domains** tailored for personal AI assistants — user preference learning, code quality analysis, and communication style optimization!
-- **[2026/03]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE).
+- **[2026/03]** 🚀 **EvolveClaw v1 released!** Self-evolving prompt system for OpenClaw with zero code modification — plugin + sidecar architecture powered by [SCOPE](https://github.com/JarvisPei/SCOPE). We also support agent workflows like [EvoFabric](https://github.com/huawei-noah/noah-research/tree/master/EvoFabric) with SCOPE, start equipping your agent with SCOPE now!
 
 ---
 
