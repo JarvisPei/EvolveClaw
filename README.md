@@ -98,10 +98,15 @@ For more details, see [OpenClaw Getting Started](https://docs.openclaw.ai/start/
 
 ### 1. Install the Plugin
 
-**Option A — From ClawHub (recommended):**
+**Option A — Install from registry (recommended):**
 
 ```bash
+# From npm
+openclaw plugins install evolveclaw
+
+# Or from ClawHub
 openclaw plugins install clawhub:evolveclaw
+
 openclaw gateway restart
 ```
 
